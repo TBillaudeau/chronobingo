@@ -301,7 +301,7 @@ export default function GamePage() {
   const otherPlayers = gameState.players.filter(p => p.id !== player.id);
 
   return (
-    <main className="container mx-auto p-2 sm:p-4">
+    <main className="container mx-auto p-2 sm:p-4 relative z-10">
         <header className="flex flex-col sm:flex-row justify-between items-center my-4 gap-4 sm:gap-0">
             <Button variant="ghost" onClick={() => router.push('/')}><Home className="mr-2 h-4 w-4"/> Accueil</Button>
             <h1 className="text-2xl sm:text-3xl font-bold text-center">Chronobingo - <span className="text-pink-500">{gameId}</span></h1>
@@ -323,7 +323,7 @@ export default function GamePage() {
             </div>
         </header>
 
-      <h2 className="text-xl sm:text-2xl font-semibold text-center mb-4">Votre Grille ({player.username}) - <span className="text-pink-500">{player.score} pts</span></h2>
+      <h2 className="text-xl sm:text-2xl font-semibold text-center mb-4">{player.username} - <span className="text-pink-500">{player.score} pts</span></h2>
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <div className={`grid gap-1 sm:gap-2 max-w-2xl mx-auto ${isCelebrating ? 'vibrate' : ''}`} style={gridStyle}>
           {player.grid.map((song, index) => (

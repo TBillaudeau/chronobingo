@@ -1,6 +1,6 @@
 import { GeistSans } from "geist/font/sans";
 import "./globals.css";
-import { Providers } from "@/components/providers";
+import ClientProviders from "@/components/ClientProviders";
 
 export const metadata = {
   title: "Chronobingo",
@@ -12,7 +12,7 @@ export default function RootLayout({ children }) {
     <html lang="fr">
       <body className={`${GeistSans.className} bg-gray-900 text-white`}>
         <div className="sparkle-background"></div>
-        <Providers>{children}</Providers>
+        <ClientProviders>{children}</ClientProviders>
       </body>
     </html>
   );
