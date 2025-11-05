@@ -12,6 +12,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Audiowide } from 'next/font/google';
+
+const audiowide = Audiowide({
+  weight: '400',
+  subsets: ['latin'],
+});
 
 export default function Home() {
   const router = useRouter();
@@ -58,8 +64,8 @@ export default function Home() {
     <main className="container mx-auto p-4 flex items-center justify-center min-h-screen">
       <div className="w-full max-w-md">
         <header className="text-center mb-12">
-          <h1 className="text-6xl font-bold">Binchro</h1>
-          <p className="text-2xl text-gray-400 mt-2">Le bingo des chansons de soirée</p>
+          <h1 className={`text-5xl font-bold ${audiowide.className}`}>Chronobingo</h1>
+          <p className="text-xl text-gray-400 mt-2">Le bingo des chansons de soirée</p>
         </header>
 
         <div className="bg-gray-800 p-8 rounded-lg shadow-2xl">

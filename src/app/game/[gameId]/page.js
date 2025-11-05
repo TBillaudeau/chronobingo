@@ -298,22 +298,22 @@ export default function GamePage() {
     gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`,
   };
 
-  const otherPlayers = gameState.players.filter(p => p.id !== player.id && !p.disconnected);
+  const otherPlayers = gameState.players.filter(p => p.id !== player.id);
 
   return (
     <main className="container mx-auto p-2 sm:p-4">
         <header className="flex flex-col sm:flex-row justify-between items-center my-4 gap-4 sm:gap-0">
             <Button variant="ghost" onClick={() => router.push('/')}><Home className="mr-2 h-4 w-4"/> Accueil</Button>
-            <h1 className="text-2xl sm:text-3xl font-bold text-center">Binchro - <span className="text-pink-500">{gameId}</span></h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-center">Chronobingo - <span className="text-pink-500">{gameId}</span></h1>
             <div className="flex items-center gap-2">
                 <Button variant="outline" onClick={copyLink}>
                     <LinkIcon className="mr-2 h-4 w-4" /> {copied ? 'Copié !' : 'Inviter'}
                 </Button>
                 <div className="relative group">
-                    <Button variant="outline"><Users className="mr-2 h-4 w-4"/> {gameState.players.filter(p => !p.disconnected).length}</Button>
+                    <Button variant="outline"><Users className="mr-2 h-4 w-4"/> {gameState.players.length}</Button>
                     <div className="absolute top-full right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-lg p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto z-10">
                         <ul className="text-white">
-                            {gameState.players.filter(p => !p.disconnected).sort((a, b) => b.score - a.score).map(p => <li key={p.id} className="p-1 flex justify-between"><span>{p.username} {p.id === player.id && '(Vous)'}</span> <span className="font-bold text-pink-500">{p.score} pts</span></li>)}
+                            {gameState.players.sort((a, b) => b.score - a.score).map(p => <li key={p.id} className="p-1 flex justify-between"><span>{p.username} {p.id === player.id && '(Vous)'}</span> <span className="font-bold text-pink-500">{p.score} pts</span></li>)}
                         </ul>
                     </div>
                 </div>

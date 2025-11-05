@@ -81,9 +81,6 @@ const calculateScore = (grid, gridSize) => {
   return score;
 };
 
-const RECONNECTION_GRACE_PERIOD = 5000; // 5 seconds
-const disconnectionTimers = {}; // Store timers for players who disconnect
-
 const SocketHandler = (req, res) => {
   if (res.socket.server.io) {
     console.log('Socket is already running');
@@ -104,13 +101,6 @@ const SocketHandler = (req, res) => {
           return;
         }
 
-        // If a player is reconnecting, cancel their disconnection timer
-        if (disconnectionTimers[username]) {
-          console.log(`Player ${username} reconnected in time. Cancelling disconnection.`);
-          clearTimeout(disconnectionTimers[username]);
-          delete disconnectionTimers[username];
-        }
-
         socket.join(gameId);
         
         const game = games[gameId];
@@ -121,22 +111,18 @@ const SocketHandler = (req, res) => {
         const existingPlayerIndex = game.players.findIndex(p => p.username === username);
 
         if (existingPlayerIndex !== -1) {
-            // Player is reconnecting, update their socket ID and mark as active
+            // Player is reconnecting, update their socket ID
             game.players[existingPlayerIndex].id = socket.id;
-            game.players[existingPlayerIndex].disconnected = false;
             player = game.players[existingPlayerIndex];
             console.log(`Player ${username} reconnected to game ${gameId} with new socket ID ${socket.id}`);
         } else {
             // New player is joining
-            player = { id: socket.id, username, grid: Array(gridCellCount).fill(null), score: 0, disconnected: false };
+            player = { id: socket.id, username, grid: Array(gridCellCount).fill(null), score: 0 };
             game.players.push(player);
             console.log(`Player ${username} joined game ${gameId} for the first time`);
         }
 
-        // The player who just joined receives their specific, complete player data.
-        socket.emit('game-joined', { player });
-
-        // Everyone in the room is notified of the updated game state.
+        socket.emit('game-joined', { gameId, player });
         io.to(gameId).emit('update-game-state', game);
       });
 
@@ -145,11 +131,6 @@ const SocketHandler = (req, res) => {
           const playerIndex = games[gameId].players.findIndex((p) => p.id === socket.id);
           if (playerIndex !== -1) {
             const username = games[gameId].players[playerIndex].username;
-            // If there was a disconnection timer, clear it
-            if (disconnectionTimers[username]) {
-              clearTimeout(disconnectionTimers[username]);
-              delete disconnectionTimers[username];
-            }
             games[gameId].players.splice(playerIndex, 1);
             console.log(`Player ${username} left game ${gameId}`);
             socket.leave(gameId);
@@ -175,37 +156,17 @@ const SocketHandler = (req, res) => {
         for (const gameId in games) {
           const game = games[gameId];
           const playerIndex = game.players.findIndex((p) => p.id === socket.id);
-
           if (playerIndex !== -1) {
-            const player = game.players[playerIndex];
-            player.disconnected = true;
-            console.log(`Player ${player.username} disconnected. Starting grace period.`);
-
-            // Announce the disconnection immediately so the UI can reflect it
-            io.to(gameId).emit('update-game-state', game);
-
-            // Set a timer to permanently remove the player if they don't reconnect
-            disconnectionTimers[player.username] = setTimeout(() => {
-              // Re-check if the player is still in the game and marked as disconnected
-              const freshGame = games[gameId];
-              if (freshGame) {
-                const finalPlayerIndex = freshGame.players.findIndex(p => p.username === player.username && p.disconnected);
-                if (finalPlayerIndex !== -1) {
-                  console.log(`Grace period for ${player.username} ended. Removing from game.`);
-                  freshGame.players.splice(finalPlayerIndex, 1);
-                  
-                  if (freshGame.players.length === 0) {
-                    console.log(`Game ${gameId} is empty, deleting.`);
-                    delete games[gameId];
-                  } else {
-                    io.to(gameId).emit('update-game-state', freshGame);
-                  }
-                }
-              }
-              delete disconnectionTimers[player.username];
-            }, RECONNECTION_GRACE_PERIOD);
-            
-            break; // Exit loop once player is found
+            const username = game.players[playerIndex].username;
+            console.log(`Player ${username} disconnected from game ${gameId}`);
+            game.players.splice(playerIndex, 1);
+            if (game.players.length === 0) {
+              console.log(`Game ${gameId} is empty, deleting.`);
+              delete games[gameId];
+            } else {
+              io.to(gameId).emit('update-game-state', game);
+            }
+            break;
           }
         }
       });
