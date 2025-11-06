@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
-## Getting Started
+# 🎵 Chronobingo
 
-First, run the development server:
+> Le bingo musical fun et interactif pour toutes vos soirées !
+
+---
+
+## 🚀 Fonctionnalités
+
+- Créez ou rejoignez une partie instantanément
+- Grille personnalisable (3x3 à 6x6)
+- Ajoutez vos chansons avec recherche intelligente
+- Grille sauvegardée même après rechargement
+- Multijoueur en temps réel
+- Interface bilingue (Français / Anglais)
+- Optimisé mobile & desktop
+
+---
+
+## 📱 Aperçu
+
+![Aperçu mobile](public/demo-mobile.png)
+![Aperçu desktop](public/demo-desktop.png)
+
+---
+
+## 🛠️ Installation
 
 ```bash
+# Installez les dépendances
+npm install
+
+# Lancez le serveur de développement
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Accédez à [http://localhost:3000](http://localhost:3000) pour jouer !
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## ✨ Utilisation
 
-## Learn More
+1. Entrez votre nom d'utilisateur
+2. Choisissez la taille de la grille
+3. Créez ou rejoignez une partie
+4. Ajoutez des chansons, cochez-les au fur et à mesure
+5. Premier à compléter une ligne, colonne ou diagonale = BINGO !
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 📦 Déploiement
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Déployez sur Vercel, Netlify ou autre :
+- Clonez le repo
+- Configurez les variables d'environnement si besoin
+- Déployez comme une app Next.js
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 📄 Licence
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT

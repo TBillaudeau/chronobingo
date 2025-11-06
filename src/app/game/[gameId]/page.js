@@ -354,7 +354,7 @@ export default function GamePage({ lang = 'fr' }) {
   const otherPlayers = gameState.players.filter(p => p.id !== player.id);
 
   return (
-    <main className="container mx-auto p-2 sm:p-4 relative z-10">
+    <main className="container mx-auto p-2 sm:p-4 relative z-10 bg-black min-h-screen" style={{ backgroundColor: '#000' }}>
       <header className="flex flex-col sm:flex-row justify-between items-center my-4 gap-4 sm:gap-0">
         <h1 className="text-2xl sm:text-3xl font-bold text-center"><span onClick={() => router.push('/')} className={`cursor-pointer ${audiowide.className}`}>{translations[lang].title}</span> - <span className="text-pink-500">{gameId}</span></h1>
         <div className="flex items-center gap-2">
@@ -383,18 +383,21 @@ export default function GamePage({ lang = 'fr' }) {
               <DialogTrigger asChild>
                 <div
                   onClick={() => handleOpenDialog(index)}
-                  className={`aspect-square flex items-center justify-center text-center p-2 rounded-lg transition-all duration-300 relative group
+                  className={`aspect-square flex items-center justify-center text-center p-2 rounded-lg transition-all duration-300 relative group overflow-hidden
                     ${song ? 'bg-gray-800 cursor-grab' : 'bg-gray-800/50 border-2 border-dashed border-gray-700 cursor-pointer'}
                     ${song?.checked ? 'bg-pink-600 scale-105 shadow-lg shadow-pink-600/30' : ''}
                     ${completedCells.includes(index) ? 'flash' : ''}
                   `}
+                  style={{ position: 'relative', width: '100%', height: '100%' }}
                 >
                   {song ? (
                     <>
-                      <div 
-                        className="absolute inset-0 rounded-lg opacity-20 group-hover:opacity-30 transition-opacity"
-                        style={{ backgroundImage: `url(${song.album.cover_medium})`, backgroundSize: 'cover', backgroundPosition: 'center', width: '100%', height: '100%' }}
-                      ></div>
+                      <img
+                        src={song.album.cover_medium}
+                        alt={song.album.title}
+                        className="absolute inset-0 w-full h-full object-cover rounded-lg opacity-20 group-hover:opacity-30 transition-opacity"
+                        style={{ aspectRatio: '1/1', pointerEvents: 'none' }}
+                      />
                       <div onClick={(e) => { e.stopPropagation(); toggleSongChecked(index); }} className="relative z-10 w-full h-full flex flex-col items-center justify-center p-1 bg-black/20 rounded-lg overflow-hidden">
                         <p className={`font-bold text-[10px] sm:text-sm leading-tight text-shadow-lg ${song.checked ? 'text-white' : 'text-white'} truncate w-full`}>{song.title}</p>
                         <p className={`text-[9px] sm:text-xs text-gray-300 text-shadow-md ${song.checked ? 'text-gray-100' : ''} truncate w-full`}>{song.artist.name}</p>
