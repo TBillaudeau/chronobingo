@@ -1,7 +1,7 @@
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
+  // output: 'standalone', // Disable standalone for standard Buildpacks
   reactStrictMode: true,
   images: {
     remotePatterns: [
