@@ -1,31 +1,23 @@
-# Dockerfile for a Next.js application
+# Image de base
+FROM node:18-alpine
 
-# Stage 1: Install dependencies
-FROM node:18-alpine AS deps
+# Dossier de travail
 WORKDIR /app
+
+# Copier uniquement ce qui est nécessaire pour installer
 COPY package.json ./
+
+# Installer les dépendances
 RUN npm install
 
-# Stage 2: Build the application
-FROM node:18-alpine AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+# Copier tout le projet
 COPY . .
+
+# Build de l’app Next.js
 RUN npm run build
 
-# Stage 3: Production image
-FROM node:18-alpine AS runner
-WORKDIR /app
-
-ENV NODE_ENV=production
-
-# The standalone output is not enabled, so we need to copy the whole .next folder
-# and the node_modules.
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-
+# Port exposé par Next
 EXPOSE 3000
 
+# Commande de démarrage
 CMD ["npm", "start"]
