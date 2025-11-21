@@ -39,20 +39,6 @@ const MainGame = () => {
       }
   };
 
-  const extractUserFromSession = (sessionUser) => {
-      // Logic: Get full name, take only first part.
-      const fullName = sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0] || 'User';
-      const firstName = fullName.split(' ')[0]; // "Jean Dupont" -> "Jean"
-
-      return {
-          id: sessionUser.id,
-          name: firstName,
-          // We do NOT store email or phone. Only UUID, Name, Avatar.
-          avatar: sessionUser.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${sessionUser.id}`,
-          isGuest: false
-      };
-  };
-
   // Initial Load & Auth Check
   useEffect(() => {
     setLang(getBrowserLanguage());
@@ -67,7 +53,13 @@ const MainGame = () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
             // User is authenticated
-            const authUser = extractUserFromSession(session.user);
+            const authUser = {
+                id: session.user.id,
+                name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
+                email: session.user.email,
+                avatar: session.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${session.user.id}`,
+                isGuest: false
+            };
             // Automatic login from session -> isManual = false
             handleLoginSuccess(authUser, false);
         } else {
@@ -88,7 +80,13 @@ const MainGame = () => {
     // Listen for Auth Changes (e.g. after Google redirect)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
         if (session?.user) {
-            const authUser = extractUserFromSession(session.user);
+            const authUser = {
+                id: session.user.id,
+                name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
+                email: session.user.email,
+                avatar: session.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${session.user.id}`,
+                isGuest: false
+            };
             // Save/Sync profile
             await saveUserToDb(authUser); 
             // New login event -> isManual = true (force navigation)

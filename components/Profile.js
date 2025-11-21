@@ -88,13 +88,13 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
       <div className="glass-liquid p-6 rounded-3xl mb-8 border border-fuchsia-500/30">
           <div className="flex items-center gap-6 mb-6">
             <div className="relative">
-                <img src={user.avatar} className="w-24 h-24 rounded-full border-4 border-fuchsia-500 shadow-[0_0_20px_rgba(217,70,239,0.4)] object-cover" alt="Profile" />
+                <img src={user.avatar} className="w-24 h-24 rounded-full border-4 border-fuchsia-500 shadow-[0_0_20px_rgba(217,70,239,0.4)]" alt="Profile" />
                 <div className="absolute bottom-0 right-0 text-2xl">{user.isGuest ? '👻' : '👑'}</div>
             </div>
             <div>
                 <h2 className="text-3xl font-black text-white tracking-tight">{user.name}</h2>
                 <p className="text-fuchsia-300 font-bold uppercase tracking-widest text-xs mt-1">
-                    {user.isGuest ? 'Invité' : 'Membre VIP'}
+                    {user.isGuest ? 'Compte Invité (Temporaire)' : user.email}
                 </p>
             </div>
           </div>
