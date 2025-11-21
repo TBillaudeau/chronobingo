@@ -49,6 +49,12 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
   }, [myPlayer?.bingoCount]);
 
   useEffect(() => {
+    if (!selectedCellId) return;
+    // Always fetch favorites when modal opens to ensure hearts are correct in search results
+    if (!currentUser.isGuest) {
+        getFavorites(currentUser.id).then(setFavoriteSongs);
+    }
+
     if (modalTab !== 'search') return;
     const delayDebounceFn = setTimeout(async () => {
       if (searchTerm.length > 2) {
@@ -62,13 +68,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
       }
     }, 500);
     return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm, modalTab]);
-
-  useEffect(() => {
-      if (modalTab === 'favorites') {
-          getFavorites(currentUser.id).then(setFavoriteSongs);
-      }
-  }, [modalTab, selectedCellId]); 
+  }, [searchTerm, modalTab, selectedCellId]);
 
   useEffect(() => { getTrendingSongs().then(setSearchResults); }, []);
 
@@ -124,6 +124,13 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
       const targetItem = newGrid[targetIdx];
       newGrid[sourceIdx] = targetItem;
       newGrid[targetIdx] = sourceItem;
+      
+      // Optimistic Update
+      const updatedPlayers = game.players.map(p => 
+        p.id === currentUser.id ? { ...p, grid: newGrid } : p
+      );
+      setGame({ ...game, players: updatedPlayers });
+
       updatePlayerGrid(game.id, currentUser.id, newGrid);
       hapticSuccess();
   };
@@ -151,8 +158,8 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
         return;
     }
 
-    // 2. ADD SONG MODE (Lobby Only)
-    if (game.status === 'lobby' && !isMoveMode) {
+    // 2. ADD SONG MODE (Lobby Only OR Empty cell during Play for Late Joiners)
+    if ((game.status === 'lobby' && !isMoveMode) || (game.status === 'playing' && !cell.song)) {
       setSelectedCellId(cell.id);
       setSearchTerm('');
       setModalTab('search');
@@ -162,7 +169,25 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
     // 3. PLAYING MODE (Toggle Mark)
     if (game.status === 'playing') {
       if (!myPlayer || !cell.song) return;
-      toggleGlobalSong(game.id, cell.song.id, !cell.marked);
+      
+      // Optimistic Update for Marking
+      const newMarkedState = !cell.marked;
+      
+      // We update local state immediately so it feels snappy
+      const updatedPlayers = game.players.map(p => {
+          if (p.grid.some(c => c.song?.id === cell.song.id)) {
+             // Update this song everywhere for everyone (since it's global toggle logic)
+             // Note: This is a partial optimistic guess, real sync happens via DB
+             const newGrid = p.grid.map(c => 
+                c.song?.id === cell.song.id ? { ...c, marked: newMarkedState } : c
+             );
+             return { ...p, grid: newGrid };
+          }
+          return p;
+      });
+      setGame({ ...game, players: updatedPlayers });
+
+      toggleGlobalSong(game.id, cell.song.id, newMarkedState);
     }
   };
 
@@ -172,7 +197,6 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
 
     // --- CHECK NO DUPLICATES MODE ---
     if (game.settings?.noDuplicates) {
-        // Check if this song ID exists in ANY player's grid
         const isTaken = game.players.some(p => 
             p.grid.some(c => c.song && c.song.id === song.id)
         );
@@ -186,19 +210,44 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
     // --------------------------------
 
     const newGrid = myPlayer.grid.map(c => c.id === selectedCellId ? { ...c, song: song } : c);
-    // Passes 'song' to updatePlayerGrid to trigger stats increment
-    await updatePlayerGrid(game.id, currentUser.id, newGrid, song);
     
+    // OPTIMISTIC UPDATE: Update local state immediately and close modal
+    const updatedPlayers = game.players.map(p => 
+        p.id === currentUser.id ? { ...p, grid: newGrid } : p
+    );
+    setGame(prev => ({ ...prev, players: updatedPlayers }));
     setSelectedCellId(null);
+    
     if (audioRef.current) audioRef.current.pause();
     setPlayingUrl(null);
+
+    // Send to DB in background
+    await updatePlayerGrid(game.id, currentUser.id, newGrid, song);
   };
 
   const handleFavToggle = async (e, song) => {
       e.stopPropagation();
+      
+      if (currentUser.isGuest) {
+          hapticError();
+          alert(t(lang, 'game.guestFavWarning'));
+          return;
+      }
+
       hapticClick();
-      const newFavs = await toggleFavorite(currentUser.id, song);
-      if (modalTab === 'favorites' && newFavs) setFavoriteSongs(newFavs);
+      
+      // Optimistic Update
+      let newFavs;
+      const exists = favoriteSongs.find(f => f.id === song.id);
+      if (exists) {
+          newFavs = favoriteSongs.filter(f => f.id !== song.id);
+      } else {
+          newFavs = [...favoriteSongs, song];
+      }
+      setFavoriteSongs(newFavs); // Update UI immediately
+
+      // Sync DB
+      await toggleFavorite(currentUser.id, song);
   }
 
   const startGame = () => {
@@ -243,7 +292,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
               </div>
               <header className="w-full flex justify-between items-center mb-8 z-10 relative">
                   <div className="flex-1"></div>
-                  <button onClick={() => { hapticClick(); removeCurrentGameId(); onLeave(); }} className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-full hover:bg-white/20 transition-colors">✕</button>
+                  <button onClick={() => { hapticClick(); removeCurrentGameId(); onLeave(); }} className="w-12 h-12 flex items-center justify-center bg-white/10 rounded-full hover:bg-white/20 transition-colors backdrop-blur-md shadow-lg border border-white/20 text-xl font-bold">✕</button>
               </header>
               <div className="z-20 flex flex-col items-center w-full">
                   <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-600 neon-text mb-2">{t(lang, 'game.gameOver')}</h1>
@@ -253,7 +302,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                       {winners.map((p, i) => (
                           <div key={p.id} className={`flex items-center p-4 rounded-3xl ${i===0 ? 'bg-gradient-to-r from-yellow-500/20 to-yellow-600/20 border border-yellow-500' : 'glass-liquid'} animate-pop`} style={{ animationDelay: `${i*0.2}s` }}>
                               <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-xl mr-4 ${i===0 ? 'bg-yellow-500 text-black' : i===1 ? 'bg-slate-300 text-black' : i===2 ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-500'}`}>{i+1}</div>
-                              <img src={p.avatar} className="w-14 h-14 rounded-full border-2 border-white/10 mr-4" alt="avt" />
+                              <img src={p.avatar} className="w-14 h-14 rounded-full border-2 border-white/10 mr-4 object-cover" alt="avt" />
                               <div className="flex-1">
                                   <p className="text-xl font-bold text-white">{p.name}</p>
                                   <p className="text-xs text-slate-400 font-black uppercase">{p.bingoCount} BINGO</p>
@@ -262,7 +311,6 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                           </div>
                       ))}
                   </div>
-                  <button onClick={() => { hapticClick(); removeCurrentGameId(); onLeave(); }} className="mt-12 px-8 py-4 bg-white text-slate-900 font-black rounded-2xl shadow-xl elastic-active z-30 relative">{t(lang, 'game.close')}</button>
               </div>
           </div>
       )
@@ -301,7 +349,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
             </button>
         ) : (
             <div className="w-10 h-10 rounded-full border-2 border-fuchsia-500 overflow-hidden cursor-pointer elastic-active shadow-[0_0_10px_rgba(217,70,239,0.5)]" onClick={() => { hapticClick(); onNavigateToProfile(); }}>
-                <img src={currentUser.avatar} alt="Me" />
+                <img src={currentUser.avatar} alt="Me" className="object-cover w-full h-full"/>
             </div>
         )}
       </header>
@@ -377,8 +425,11 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                 )}
                             </>
                         ) : (
-                            <div className="w-8 h-8 rounded-full border-2 border-dashed border-slate-600 flex items-center justify-center text-slate-600">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+                            <div className="flex flex-col items-center gap-1 opacity-50 hover:opacity-100 transition-opacity cursor-copy">
+                                <div className="w-8 h-8 rounded-full bg-cyan-500/20 border-2 border-cyan-500 flex items-center justify-center text-cyan-400">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+                                </div>
+                                <span className="text-[8px] font-black uppercase text-cyan-400">Ajouter</span>
                             </div>
                         )}
                     </div>
@@ -413,7 +464,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                       {opponents.map(p => (
                         <div key={p.id} className={`glass-liquid p-4 rounded-3xl ${p.bingoCount > 0 ? 'border-yellow-400/50 shadow-[0_0_30px_rgba(234,179,8,0.2)]' : ''}`}>
                            <div className="flex items-center gap-3 mb-4">
-                              <img src={p.avatar} className="w-10 h-10 rounded-full border-2 border-slate-600" alt="avt" />
+                              <img src={p.avatar} className="w-10 h-10 rounded-full border-2 border-slate-600 object-cover" alt="avt" />
                               <div className="min-w-0 flex-1">
                                 <p className="text-sm font-bold text-white">{p.name}</p>
                                 {p.bingoCount > 0 && <p className="text-[10px] text-yellow-400 font-black animate-bounce uppercase">🏆 {t(lang, 'game.bingo')}</p>}
@@ -467,7 +518,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                 {game.players.sort((a, b) => b.score - a.score).map((p, i) => (
                     <div key={p.id} className={`flex items-center p-4 rounded-2xl border ${p.id === currentUser.id ? 'bg-slate-800 border-cyan-500 shadow-lg' : 'glass-liquid border-transparent'}`}>
                         <div className={`font-black w-8 text-center mr-2 ${i===0?'text-yellow-400 text-xl': 'text-slate-500'}`}>{i+1}</div>
-                        <img src={p.avatar} className="w-12 h-12 rounded-full mr-4 border-2 border-slate-700" alt="avt" />
+                        <img src={p.avatar} className="w-12 h-12 rounded-full mr-4 border-2 border-slate-700 object-cover" alt="avt" />
                         <div className="flex-1">
                             <p className="font-bold text-base text-white">{p.name} {p.id === game.hostId && '👑'}</p>
                             <p className="text-xs text-slate-400 font-bold uppercase">{p.bingoCount > 0 ? `🔥 ${p.bingoCount} BINGO!` : t(lang, 'game.playing')}</p>
@@ -496,8 +547,14 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                         <button onClick={() => setModalTab('search')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${modalTab === 'search' ? 'bg-cyan-500/80 text-white shadow-lg backdrop-blur-md' : 'text-slate-400 hover:text-white'}`}>
                            🔍 {t(lang, 'game.modalTabSearch')}
                         </button>
-                        <button onClick={() => setModalTab('favorites')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${modalTab === 'favorites' ? 'bg-fuchsia-500/80 text-white shadow-lg backdrop-blur-md' : 'text-slate-400 hover:text-white'}`}>
-                           ❤️ {t(lang, 'game.modalTabFavs')}
+                        <button 
+                            onClick={() => {
+                                if(currentUser.isGuest) { hapticError(); alert(t(lang, 'game.guestFavWarning')); return; }
+                                setModalTab('favorites');
+                            }} 
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${currentUser.isGuest ? 'opacity-50 cursor-not-allowed' : ''} ${modalTab === 'favorites' ? 'bg-fuchsia-500/80 text-white shadow-lg backdrop-blur-md' : 'text-slate-400 hover:text-white'}`}
+                        >
+                           {currentUser.isGuest ? '🔒' : '❤️'} {t(lang, 'game.modalTabFavs')}
                         </button>
                     </div>
                     <button 
@@ -556,7 +613,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
 
                             <button 
                                 onClick={(e) => handleFavToggle(e, song)} 
-                                className="p-3 rounded-full hover:bg-white/10 active:scale-90 transition-transform group/heart"
+                                className={`p-3 rounded-full hover:bg-white/10 active:scale-90 transition-transform group/heart ${currentUser.isGuest ? 'opacity-30 grayscale cursor-not-allowed' : ''}`}
                             >
                                 {favoriteSongs.find(f => f.id === song.id) ? (
                                     <svg className="w-6 h-6 text-fuchsia-500 filter drop-shadow-[0_0_8px_rgba(217,70,239,0.5)]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" /></svg>

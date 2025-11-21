@@ -4,8 +4,9 @@ import { supabase } from '../lib/supabase';
 // Storage Keys (Client side cache)
 const USER_KEY = 'disco_bingo_user';
 const CURRENT_GAME_KEY = 'disco_bingo_current_game'; 
+const GUEST_HISTORY_KEY = 'disco_bingo_guest_history';
 
-// --- 1. User & Profile Management (DB + Local) ---
+// --- 1. Auth & User Management ---
 
 export const getLocalUser = () => {
   if (typeof window === 'undefined') return null;
@@ -19,17 +20,42 @@ export const saveLocalUser = (user) => {
   }
 };
 
-// Sync user to DB (Upsert)
+export const removeLocalUser = () => {
+  if (typeof window !== 'undefined') {
+      localStorage.removeItem(USER_KEY);
+  }
+};
+
+// Real Google Login
+export const loginWithGoogle = async () => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+            redirectTo: window.location.origin,
+            queryParams: {
+                access_type: 'offline',
+                prompt: 'consent',
+            },
+        },
+    });
+    if (error) throw error;
+    return data;
+};
+
+// Sync user to DB (Upsert) - Data Minimization: Only ID, Name, Avatar
 export const saveUserToDb = async (user) => {
   if (!user) return;
+  
   saveLocalUser(user);
 
+  // Guest logic is ephemeral, but we store basic info for multiplayer consistency
   const { error } = await supabase
     .from('profiles')
     .upsert({
         id: user.id,
-        name: user.name,
+        name: user.name, // First name only as processed by MainGame
         avatar: user.avatar,
+        is_guest: !!user.isGuest,
         updated_at: new Date()
     }, { onConflict: 'id' });
 
@@ -37,45 +63,73 @@ export const saveUserToDb = async (user) => {
 };
 
 export const getUserProfile = async (userId) => {
+    if (!userId) return null;
+    
     const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
     
-    if (error) return null;
-    return data;
+    if (error) {
+        console.warn("Error fetching profile:", error.message);
+        // Return a safe default object instead of null to prevent crashes
+        return { 
+            id: userId, 
+            favorites: [], 
+            history: [], 
+            stats: { games_played: 0, games_won: 0, songs_chosen: 0, bingos: 0 },
+            song_stats: {} 
+        };
+    }
+
+    // Ensure arrays are not null even if DB returns null
+    return {
+        ...data,
+        favorites: data?.favorites || [],
+        history: data?.history || [],
+        stats: data?.stats || { games_played: 0, games_won: 0, songs_chosen: 0, bingos: 0 },
+        song_stats: data?.song_stats || {}
+    };
 };
 
-export const logoutUser = () => {
+export const logoutUser = async () => {
   if (typeof window === 'undefined') return;
+  
+  // Clear local
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(CURRENT_GAME_KEY);
+  
+  // Clear Supabase Auth
+  await supabase.auth.signOut();
 };
 
 // --- 2. Favorites & Stats Management ---
 
 export const updateUserStats = async (userId, updates) => {
-    const { data: profile } = await supabase.from('profiles').select('stats').eq('id', userId).single();
-    
-    const currentStats = profile?.stats || { games_played: 0, games_won: 0, songs_chosen: 0, bingos: 0 };
+    if (userId.startsWith('guest-')) return;
+
+    // Fetch current stats safely
+    const profile = await getUserProfile(userId);
+    const currentStats = profile.stats;
     
     const newStats = {
-        games_played: currentStats.games_played + (updates.games_played || 0),
-        games_won: currentStats.games_won + (updates.games_won || 0),
-        songs_chosen: currentStats.songs_chosen + (updates.songs_chosen || 0),
-        bingos: currentStats.bingos + (updates.bingos || 0)
+        games_played: (currentStats.games_played || 0) + (updates.games_played || 0),
+        games_won: (currentStats.games_won || 0) + (updates.games_won || 0),
+        songs_chosen: (currentStats.songs_chosen || 0) + (updates.songs_chosen || 0),
+        bingos: (currentStats.bingos || 0) + (updates.bingos || 0)
     };
 
-    await supabase.from('profiles').update({ stats: newStats }).eq('id', userId);
+    // Use upsert to ensure it writes even if row somehow missing
+    await supabase.from('profiles').upsert({ id: userId, stats: newStats, updated_at: new Date() });
 };
 
 // Helper to update the nested JSONB "song_stats"
-// Structure: { "songId": { title: "", selected: 0, validated: 0 } }
 const updatePersonalSongStats = async (userId, song, action) => {
-    if (!song || !song.id) return;
-    const { data } = await supabase.from('profiles').select('song_stats').eq('id', userId).single();
-    let stats = data?.song_stats || {};
+    if (!song || !song.id || userId.startsWith('guest-')) return;
+
+    const profile = await getUserProfile(userId);
+    let stats = profile.song_stats || {};
     
     const sId = song.id.toString();
     if (!stats[sId]) {
@@ -85,14 +139,16 @@ const updatePersonalSongStats = async (userId, song, action) => {
     if (action === 'select') stats[sId].selected += 1;
     if (action === 'validate') stats[sId].validated += 1;
 
-    await supabase.from('profiles').update({ song_stats: stats }).eq('id', userId);
+    await supabase.from('profiles').upsert({ id: userId, song_stats: stats, updated_at: new Date() });
 };
 
 export const toggleFavorite = async (userId, song) => {
-    const profile = await getUserProfile(userId);
-    if (!profile) return;
+    if (userId.startsWith('guest-')) return [];
 
-    let favs = profile.favorites || [];
+    const profile = await getUserProfile(userId);
+    // Safe fallback to empty array if null
+    let favs = profile.favorites || []; 
+    
     const exists = favs.find(f => f.id === song.id);
 
     if (exists) {
@@ -101,13 +157,20 @@ export const toggleFavorite = async (userId, song) => {
         favs = [...favs, song];
     }
 
-    await supabase.from('profiles').update({ favorites: favs }).eq('id', userId);
+    const { error } = await supabase.from('profiles').upsert({ 
+        id: userId, 
+        favorites: favs,
+        updated_at: new Date()
+    });
+
+    if (error) console.error("Error saving favorites:", error);
     return favs;
 };
 
 export const getFavorites = async (userId) => {
+    if (userId.startsWith('guest-')) return [];
     const profile = await getUserProfile(userId);
-    return profile?.favorites || [];
+    return profile.favorites; // getUserProfile guarantees this is an array
 };
 
 // --- 3. Global Song Leaderboard ---
@@ -161,7 +224,6 @@ export const incrementSongValidationCount = async (songId) => {
 };
 
 export const getGlobalLeaderboard = async () => {
-    // Sort by Validations first (Efficiency), then Play Count (Popularity)
     const { data, error } = await supabase
         .from('global_songs')
         .select('*')
@@ -170,7 +232,7 @@ export const getGlobalLeaderboard = async () => {
         .limit(10);
     
     if (error) {
-        console.warn("Leaderboard fetch error:", error);
+        console.warn("Leaderboard fetch error (Check RLS?):", error.message);
         return [];
     }
     return data;
@@ -198,30 +260,61 @@ export const removeCurrentGameId = () => {
 const addToHistory = async (game, userId) => {
     if (!userId || !game) return;
     
-    const profile = await getUserProfile(userId);
-    if (!profile) return;
-
-    let history = profile.history || [];
-    
     const summary = {
         id: game.id,
         hostName: game.players.find(p => p.id === game.hostId)?.name || 'Unknown',
         date: Date.now(),
         status: game.status,
         myScore: game.players.find(p => p.id === userId)?.score || 0,
-        userId: userId // Store who played this for filtering
+        userId: userId
     };
 
+    // 5a. Guest History (LocalStorage)
+    if (userId.startsWith('guest-')) {
+        if (typeof window === 'undefined') return;
+        let localHistory = [];
+        try {
+            const stored = localStorage.getItem(GUEST_HISTORY_KEY);
+            if (stored) localHistory = JSON.parse(stored);
+        } catch(e) {}
+
+        localHistory = localHistory.filter(h => h.id !== game.id);
+        localHistory.unshift(summary);
+        localHistory = localHistory.slice(0, 10);
+        
+        localStorage.setItem(GUEST_HISTORY_KEY, JSON.stringify(localHistory));
+        return;
+    }
+
+    // 5b. Real User History (Supabase)
+    const profile = await getUserProfile(userId);
+    let history = profile.history || []; // Safe default
+    
     history = history.filter(h => h.id !== game.id);
     history.unshift(summary);
     history = history.slice(0, 20);
 
-    await supabase.from('profiles').update({ history }).eq('id', userId);
+    const { error } = await supabase.from('profiles').upsert({ 
+        id: userId, 
+        history: history,
+        updated_at: new Date()
+    });
+    
+    if (error) console.error("Error saving history:", error);
 };
 
 export const getGameHistory = async (userId) => {
+    if (userId && userId.startsWith('guest-')) {
+        if (typeof window === 'undefined') return [];
+        try {
+            const stored = localStorage.getItem(GUEST_HISTORY_KEY);
+            return stored ? JSON.parse(stored) : [];
+        } catch(e) { return []; }
+    }
+    
+    // Real User - getUserProfile guarantees an array return
     const profile = await getUserProfile(userId);
-    return profile?.history || [];
+    return profile.history;
 };
 
 // --- 6. Game Logic (Realtime) ---
@@ -249,11 +342,14 @@ export const subscribeToGame = (gameId, onUpdate) => {
 export const createGame = async (host, settings = {}) => {
   const gameId = Math.random().toString(36).substr(2, 6).toUpperCase();
   
+  // Force allowLateJoin to true always
+  const finalSettings = { ...settings, allowLateJoin: true };
+
   const newGameData = {
     id: gameId,
     hostId: host.id,
     status: 'lobby',
-    settings: settings, // Store settings (e.g., noDuplicates)
+    settings: finalSettings, 
     players: [{
       id: host.id,
       name: host.name,
@@ -295,6 +391,7 @@ export const joinGame = async (gameId, user) => {
 
   let game = data.data;
 
+  // Auto-expire games after 24h
   if (game.status !== 'finished' && (Date.now() - (game.createdAt || 0) > 24 * 60 * 60 * 1000)) {
       game.status = 'finished';
       await saveGameState(cleanId, game);
@@ -304,6 +401,7 @@ export const joinGame = async (gameId, user) => {
     const playerExists = game.players.some(p => p.id === user.id);
     
     if (!playerExists) {
+        // Late join is always allowed now
         game.players.push({
             id: user.id,
             name: user.name,
@@ -333,17 +431,18 @@ export const finishGame = async (gameId) => {
     let game = await joinGame(gameId, null);
     if(!game) return;
     
-    await updateGame(gameId, { status: 'finished' });
+    const updatedGame = { ...game, status: 'finished' };
+    await saveGameState(gameId, updatedGame);
+    
+    // Update local history for the host immediately so UI refreshes
+    const hostId = game.hostId;
+    await addToHistory(updatedGame, hostId);
     
     const winners = game.players.sort((a, b) => b.score - a.score);
     if (winners.length > 0) {
         const winnerId = winners[0].id;
         await updateUserStats(winnerId, { games_won: 1 });
     }
-
-    // Force update history locally for players currently connected
-    // In a real app, we would use Realtime on profiles table or similar.
-    // Here, rely on lobby logic.
 };
 
 export const updatePlayerGrid = async (gameId, playerId, grid, newSong = null) => {
@@ -382,7 +481,6 @@ export const toggleGlobalSong = async (gameId, songId, newState) => {
              playerChanged = true;
              changesMade = true;
              
-             // Track Stats: If we are marking it (Validating)
              if (newState) {
                  updatePersonalSongStats(player.id, cell.song, 'validate');
                  validatedForFirstTimeInGame = true;

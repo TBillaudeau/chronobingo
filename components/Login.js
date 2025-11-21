@@ -1,42 +1,47 @@
 
 import React, { useState } from 'react';
-import { saveUserToDb } from '../services/gameService';
+import { loginWithGoogle } from '../services/gameService';
 import { t } from '../services/translations';
 import { hapticClick } from '../services/haptics';
 
 const Login = ({ lang, onLogin, initialCode }) => {
+  const [mode, setMode] = useState('menu'); // 'menu' | 'guest_input'
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const generateUser = (isGuest) => ({
-    id: 'user-' + Math.random().toString(36).substr(2, 9),
-    name: name.trim() || (isGuest ? 'Invité Mystère' : 'Party Animal'),
-    email: isGuest ? undefined : 'user@example.com',
-    avatar: `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${name || 'party'}${isGuest ? 'guest' : ''}`,
-    isGuest
-  });
+  // 1. Real Google Login
+  const handleGoogleLogin = async () => {
+      hapticClick();
+      setIsLoading(true);
+      try {
+          await loginWithGoogle();
+          // Redirect will happen, MainGame handles the rest
+      } catch (error) {
+          console.error("Login failed", error);
+          setIsLoading(false);
+          alert("Erreur de connexion Google");
+      }
+  };
 
-  const handleLoginAction = async (isGuest) => {
+  // 2. Guest Login Flow
+  const handleGuestSubmit = async () => {
+    if (!name.trim()) return;
     hapticClick();
     setIsLoading(true);
-    const user = generateUser(isGuest);
     
-    // Sync to DB immediately
-    await saveUserToDb(user);
-    
-    onLogin(user, initialCode || '');
-    setIsLoading(false);
+    const guestUser = {
+        id: 'guest-' + Math.random().toString(36).substr(2, 9),
+        name: name.trim(),
+        avatar: `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${name}guest`,
+        isGuest: true
+    };
+
+    onLogin(guestUser); // Pass back to MainGame
   };
   
-  // Letter animation helper
   const renderTitle = () => {
-      const title = "DISCO BINGO";
-      return title.split('').map((char, index) => (
-          <span 
-            key={index} 
-            className="inline-block animate-float" 
-            style={{ animationDelay: `${index * 0.1}s` }}
-          >
+      return "DISCO BINGO".split('').map((char, index) => (
+          <span key={index} className="inline-block animate-float" style={{ animationDelay: `${index * 0.1}s` }}>
             {char === ' ' ? '\u00A0' : char}
           </span>
       ));
@@ -57,42 +62,72 @@ const Login = ({ lang, onLogin, initialCode }) => {
 
       <div className="glass-liquid p-8 rounded-3xl w-full max-w-md animate-pop delay-200">
         
-        <div className="space-y-6 mb-8">
-          <div className="text-left group">
-            <label className="text-xs font-bold text-fuchsia-300 uppercase ml-1 mb-1 block group-focus-within:text-fuchsia-400 transition-colors">{t(lang, 'login.placeholderName')}</label>
-            <input 
-              type="text" 
-              placeholder={t(lang, 'login.placeholderNameInput')}
-              className="w-full bg-slate-900/40 border border-slate-600 text-white rounded-2xl px-5 py-4 focus:outline-none focus:border-fuchsia-500 focus:ring-2 focus:ring-fuchsia-500/20 transition-all text-lg placeholder-slate-500 hover:border-slate-500"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-        </div>
-        
-        <button 
-          onClick={() => handleLoginAction(true)}
-          disabled={isLoading}
-          className="w-full bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-[0_0_20px_rgba(192,38,211,0.4)] mb-4 text-lg elastic-active relative overflow-hidden group"
-        >
-          <span className="relative z-10">{isLoading ? '...' : t(lang, 'login.btnGuest')}</span>
-          <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 rounded-2xl"></div>
-        </button>
+        {mode === 'menu' ? (
+            <div className="space-y-4">
+                {/* Option A: Google (Persistent) */}
+                <button 
+                  onClick={handleGoogleLogin}
+                  disabled={isLoading}
+                  className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-4 px-6 rounded-2xl transition-all flex items-center justify-center gap-3 elastic-active shadow-xl group"
+                >
+                  {isLoading ? (
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-900"></div>
+                  ) : (
+                      <>
+                        <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-6 h-6" alt="G" />
+                        <span className="text-lg">Connexion Google</span>
+                      </>
+                  )}
+                </button>
+                <p className="text-[10px] text-slate-400 font-medium">
+                    Sauvegarde tes favoris, historique et statistiques.
+                </p>
 
-        <div className="relative flex py-3 items-center mb-4 opacity-50">
-          <div className="flex-grow border-t border-slate-500"></div>
-          <span className="flex-shrink-0 mx-4 text-slate-400 text-xs font-bold">{t(lang, 'login.or')}</span>
-          <div className="flex-grow border-t border-slate-500"></div>
-        </div>
+                <div className="relative flex py-2 items-center opacity-50 my-4">
+                  <div className="flex-grow border-t border-slate-500"></div>
+                  <span className="flex-shrink-0 mx-4 text-slate-400 text-xs font-bold">{t(lang, 'login.or')}</span>
+                  <div className="flex-grow border-t border-slate-500"></div>
+                </div>
 
-        <button 
-          onClick={() => handleLoginAction(false)}
-          disabled={isLoading}
-          className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-3 px-6 rounded-2xl transition-all flex items-center justify-center gap-3 elastic-active shadow-lg"
-        >
-          <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-5 h-5" alt="G" />
-          {t(lang, 'login.btnGoogle')}
-        </button>
+                {/* Option B: Guest (Ephemeral) */}
+                <button 
+                  onClick={() => { hapticClick(); setMode('guest_input'); }}
+                  className="w-full bg-slate-800/50 hover:bg-slate-800 text-slate-300 hover:text-white font-bold py-3 px-6 rounded-2xl transition-all elastic-active border border-white/10"
+                >
+                  {t(lang, 'login.btnGuest')}
+                </button>
+                 <p className="text-[10px] text-slate-500">
+                    Compte éphémère. Tes données seront perdues à la déconnexion.
+                </p>
+            </div>
+        ) : (
+            <div className="space-y-6 animate-slide-up">
+                <div className="text-left">
+                    <button onClick={() => setMode('menu')} className="text-xs text-slate-400 hover:text-white mb-4 flex items-center gap-1">
+                        ← Retour
+                    </button>
+                    <label className="text-xs font-bold text-fuchsia-300 uppercase ml-1 mb-1 block">{t(lang, 'login.placeholderNameInput')}</label>
+                    <input 
+                      autoFocus
+                      type="text" 
+                      placeholder="Ex: Disco Dave"
+                      className="w-full bg-slate-900/40 border border-slate-600 text-white rounded-2xl px-5 py-4 focus:outline-none focus:border-fuchsia-500 focus:ring-2 focus:ring-fuchsia-500/20 transition-all text-lg placeholder-slate-500"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleGuestSubmit()}
+                    />
+                </div>
+                
+                <button 
+                  onClick={handleGuestSubmit}
+                  disabled={!name.trim() || isLoading}
+                  className="w-full bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-[0_0_20px_rgba(192,38,211,0.4)] text-lg elastic-active disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? '...' : "C'est parti !"}
+                </button>
+            </div>
+        )}
+
       </div>
     </div>
   );

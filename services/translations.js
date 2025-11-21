@@ -33,7 +33,9 @@ export const dictionary = {
       lastPlayed: "Joué il y a",
       host: "DJ",
       modeNoDuplicates: "Mode Sans Doublons",
-      modeNoDuplicatesDesc: "Une chanson ne peut être choisie que par un seul joueur."
+      modeNoDuplicatesDesc: "Une chanson ne peut être choisie que par un seul joueur.",
+      modeLateJoin: "Autoriser les retardataires",
+      modeLateJoinDesc: "Les joueurs peuvent rejoindre après le début."
     },
     game: {
       statusPlaying: "EN COURS",
@@ -62,7 +64,9 @@ export const dictionary = {
       gameOver: "PODIUM FINAL",
       winner: "VAINQUEUR",
       rank: "Rang",
-      errorDuplicate: "⛔ Cette chanson est déjà prise par un autre joueur !"
+      errorDuplicate: "⛔ Cette chanson est déjà prise par un autre joueur !",
+      guestFavWarning: "🔒 Connecte-toi avec Google pour gérer tes favoris !",
+      errorLateJoin: "⛔ La partie a commencé et n'accepte plus de nouveaux joueurs."
     },
     profile: {
       title: "Mon Profil",
@@ -112,7 +116,9 @@ export const dictionary = {
       lastPlayed: "Played",
       host: "DJ",
       modeNoDuplicates: "No Duplicates Mode",
-      modeNoDuplicatesDesc: "A song can only be picked by one player."
+      modeNoDuplicatesDesc: "A song can only be picked by one player.",
+      modeLateJoin: "Allow Late Joiners",
+      modeLateJoinDesc: "Players can join after the game has started."
     },
     game: {
       statusPlaying: "PLAYING",
@@ -141,7 +147,9 @@ export const dictionary = {
       gameOver: "FINAL PODIUM",
       winner: "WINNER",
       rank: "Rank",
-      errorDuplicate: "⛔ This song is already taken by another player!"
+      errorDuplicate: "⛔ This song is already taken by another player!",
+      guestFavWarning: "🔒 Login with Google to manage favorites!",
+      errorLateJoin: "⛔ The game has started and is closed to new players."
     },
     profile: {
       title: "My Profile",

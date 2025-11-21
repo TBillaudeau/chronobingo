@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { getUserProfile, toggleFavorite, logoutUser } from '../services/gameService';
+import { getUserProfile, toggleFavorite, logoutUser, getGameHistory } from '../services/gameService';
 import { t } from '../services/translations';
 
 const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame }) => {
-  const [activeTab, setActiveTab] = useState('history');
+  const [activeTab, setActiveTab] = useState('history'); // Default to history for everyone
   const [favorites, setFavorites] = useState([]);
   const [history, setHistory] = useState([]);
   const [stats, setStats] = useState(null);
@@ -13,21 +13,34 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
   const audioRef = useRef(null);
 
   useEffect(() => {
-    const loadProfile = async () => {
+    const loadData = async () => {
+        // Load History (Hybrid: Local for guest, DB for user)
+        const userHistory = await getGameHistory(user.id);
+        setHistory(userHistory.filter(h => h.userId === user.id));
+
+        if (user.isGuest) return;
+
+        // Load full profile only for real users
         const profile = await getUserProfile(user.id);
         if (profile) {
             setFavorites(profile.favorites || []);
-            setHistory(profile.history ? profile.history.filter(h => h.userId === user.id) : []);
             setStats(profile.stats);
             setSongStats(profile.song_stats || {});
         }
     };
-    loadProfile();
-  }, [user.id]);
+    loadData();
+  }, [user.id, user.isGuest]);
 
   const handleToggleFav = async (song) => {
-      const newFavs = await toggleFavorite(user.id, song);
-      if (newFavs) setFavorites(newFavs);
+      let newFavs;
+      const exists = favorites.find(f => f.id === song.id);
+      if (exists) {
+          newFavs = favorites.filter(f => f.id !== song.id);
+      } else {
+          newFavs = [...favorites, song];
+      }
+      setFavorites(newFavs);
+      await toggleFavorite(user.id, song);
   };
 
   const toggleAudio = (url) => {
@@ -50,23 +63,17 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
     ? ((stats.games_won / stats.games_played) * 100).toFixed(0) 
     : 0;
 
-  // Compute Tops & Flops
   const computedSongStats = Object.entries(songStats).map(([id, data]) => {
       const successRate = data.selected > 0 ? (data.validated / data.selected) : 0;
       return { id, ...data, successRate };
   });
-  
-  // Best: High success rate, min 2 selections
-  const bestSongs = [...computedSongStats]
-      .filter(s => s.selected >= 2)
-      .sort((a, b) => b.successRate - a.successRate)
-      .slice(0, 3);
+  const bestSongs = [...computedSongStats].filter(s => s.selected >= 2).sort((a, b) => b.successRate - a.successRate).slice(0, 3);
+  const worstSongs = [...computedSongStats].filter(s => s.selected >= 2 && s.successRate < 0.5).sort((a, b) => a.successRate - b.successRate).slice(0, 3);
 
-  // Worst: Low success rate, High selections
-  const worstSongs = [...computedSongStats]
-      .filter(s => s.selected >= 2 && s.successRate < 0.5)
-      .sort((a, b) => a.successRate - b.successRate) // Lowest rate first
-      .slice(0, 3);
+  const handleLogout = async () => {
+      await logoutUser();
+      window.location.reload();
+  };
 
   return (
     <div className="w-full max-w-2xl mx-auto p-4 pt-8 pb-20 min-h-screen flex flex-col animate-pop">
@@ -81,16 +88,23 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
       <div className="glass-liquid p-6 rounded-3xl mb-8 border border-fuchsia-500/30">
           <div className="flex items-center gap-6 mb-6">
             <div className="relative">
-                <img src={user.avatar} className="w-24 h-24 rounded-full border-4 border-fuchsia-500 shadow-[0_0_20px_rgba(217,70,239,0.4)]" alt="Profile" />
-                <div className="absolute bottom-0 right-0 text-2xl">👑</div>
+                <img src={user.avatar} className="w-24 h-24 rounded-full border-4 border-fuchsia-500 shadow-[0_0_20px_rgba(217,70,239,0.4)] object-cover" alt="Profile" />
+                <div className="absolute bottom-0 right-0 text-2xl">{user.isGuest ? '👻' : '👑'}</div>
             </div>
             <div>
                 <h2 className="text-3xl font-black text-white tracking-tight">{user.name}</h2>
-                <p className="text-fuchsia-300 font-bold uppercase tracking-widest text-xs mt-1">{user.email || 'VIP Guest'}</p>
+                <p className="text-fuchsia-300 font-bold uppercase tracking-widest text-xs mt-1">
+                    {user.isGuest ? 'Invité' : 'Membre VIP'}
+                </p>
             </div>
           </div>
           
-          {stats && (
+          {user.isGuest ? (
+              <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl text-center">
+                  <p className="text-yellow-200 font-bold text-sm">Connecte-toi pour voir tes stats !</p>
+              </div>
+          ) : (
+             stats && (
               <div className="grid grid-cols-3 gap-2 mt-4">
                   <div className="bg-black/30 p-3 rounded-xl text-center">
                       <p className="text-xs text-slate-400 uppercase font-bold">Parties</p>
@@ -104,51 +118,60 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
                       <p className="text-xs text-slate-400 uppercase font-bold">Ratio</p>
                       <p className="text-xl font-black text-cyan-400">{ratio}%</p>
                   </div>
-                  <div className="bg-black/30 p-3 rounded-xl text-center col-span-3 mt-1">
-                      <p className="text-xs text-slate-400 uppercase font-bold">Chansons Choisies</p>
-                      <p className="text-xl font-black text-fuchsia-400">{stats.songs_chosen}</p>
-                  </div>
               </div>
+             )
           )}
       </div>
 
-      {/* TOPS & FLOPS */}
-      {(bestSongs.length > 0 || worstSongs.length > 0) && (
+      {!user.isGuest && (bestSongs.length > 0 || worstSongs.length > 0) && (
           <div className="mb-8 space-y-4">
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-2">Mes Tops & Flops</h3>
               <div className="grid grid-cols-2 gap-4">
                   <div className="glass-liquid p-4 rounded-2xl bg-emerald-500/5 border-emerald-500/20">
                       <p className="text-emerald-400 font-black text-sm mb-2">TOPS 🍀</p>
-                      {bestSongs.length > 0 ? bestSongs.map(s => (
+                      {bestSongs.map(s => (
                           <div key={s.id} className="text-xs mb-1">
                               <span className="text-white font-bold block truncate">{s.title}</span>
                               <span className="text-emerald-500 font-mono">{(s.successRate * 100).toFixed(0)}% win</span>
                           </div>
-                      )) : <p className="text-[10px] text-slate-500">Pas assez de données</p>}
+                      ))}
                   </div>
                   <div className="glass-liquid p-4 rounded-2xl bg-red-500/5 border-red-500/20">
                       <p className="text-red-400 font-black text-sm mb-2">FLOPS 💀</p>
-                      {worstSongs.length > 0 ? worstSongs.map(s => (
+                      {worstSongs.map(s => (
                           <div key={s.id} className="text-xs mb-1">
                               <span className="text-white font-bold block truncate">{s.title}</span>
                               <span className="text-red-500 font-mono">{(s.successRate * 100).toFixed(0)}% win</span>
                           </div>
-                      )) : <p className="text-[10px] text-slate-500">Pas assez de données</p>}
+                      ))}
                   </div>
               </div>
           </div>
       )}
 
       <div className="flex p-1.5 bg-slate-900/60 backdrop-blur-md rounded-2xl mb-8 border border-white/10">
-          {['history', 'favorites', 'settings'].map(tab => (
+          <button 
+            onClick={() => setActiveTab('history')}
+            className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-xl transition-all elastic-active ${activeTab === 'history' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+          >
+              {t(lang, 'profile.tabHistory')}
+          </button>
+
+          {!user.isGuest && (
               <button 
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-xl transition-all elastic-active ${activeTab === tab ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                onClick={() => setActiveTab('favorites')}
+                className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-xl transition-all elastic-active ${activeTab === 'favorites' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
               >
-                  {t(lang, `profile.tab${tab === 'history' ? 'History' : tab === 'favorites' ? 'Favs' : 'Settings'}`)}
+                  {t(lang, 'profile.tabFavs')}
               </button>
-          ))}
+          )}
+          
+           <button 
+                onClick={() => setActiveTab('settings')}
+                className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-xl transition-all elastic-active ${activeTab === 'settings' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+              >
+                  {t(lang, 'profile.tabSettings')}
+            </button>
       </div>
 
       <div className="flex-1 animate-pop delay-100">
@@ -181,7 +204,7 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
               </div>
           )}
 
-          {activeTab === 'favorites' && (
+          {activeTab === 'favorites' && !user.isGuest && (
               <div className="space-y-3">
                   {favorites.length === 0 ? (
                       <div className="text-center py-12 glass-liquid rounded-3xl">
@@ -234,10 +257,10 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
                   </div>
 
                   <button 
-                    onClick={() => { logoutUser(); onLogout(); }} 
+                    onClick={handleLogout} 
                     className="w-full py-4 bg-red-500/10 border border-red-500/50 text-red-400 font-black rounded-2xl hover:bg-red-500 hover:text-white transition-all shadow-lg elastic-active"
                   >
-                      {t(lang, 'profile.btnLogout')}
+                      {user.isGuest ? 'Quitter le mode Invité' : t(lang, 'profile.btnLogout')}
                   </button>
               </div>
           )}

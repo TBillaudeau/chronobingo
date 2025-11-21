@@ -38,10 +38,14 @@ Le jeu de bingo musical ultime pour vos soirées.
      cover text,
      preview text,
      play_count int default 1,
-     last_played_at timestamp with time zone default now()
+     last_played_at timestamp with time zone default now(),
+     validation_count int default 0
    );
 
-   -- 4. Désactiver la sécurité restrictive (Mode Invité)
+   -- 4. Ajouter les stats détaillées par chanson (Si table profiles existe déjà)
+   alter table profiles add column song_stats jsonb default '{}';
+
+   -- 5. Désactiver la sécurité restrictive (Mode Invité)
    alter table gamestates disable row level security;
    alter table profiles disable row level security;
    alter table global_songs disable row level security;
@@ -49,7 +53,18 @@ Le jeu de bingo musical ultime pour vos soirées.
 
 3. Activez le **Realtime** : Allez dans `Database` -> `Replication` -> Cliquez sur `gamestates` -> Activez `Insert/Update/Delete`.
 
-### 2. Configuration
+### 2. Configuration Google Auth (Pour sauvegarder les comptes)
+
+1. **Supabase** : Allez dans `Authentication` > `Providers` > `Google`. Copiez l'URL "Callback URL".
+2. **Google Cloud Console** : Créez un projet, allez dans `APIs & Services` > `Credentials` > `Create OAuth Client ID`.
+   - Type: Web Application
+   - Authorized redirect URIs: Collez l'URL de Supabase copiée juste avant.
+3. **Supabase** : Collez le `Client ID` et `Client Secret` fournis par Google et activez le provider.
+4. **Supabase (URL Config)** : Allez dans `Authentication` > `URL Configuration`.
+   - Site URL: `http://localhost:3000`
+   - Redirect URLs: Ajoutez `http://localhost:3000/**` (et votre URL de prod plus tard).
+
+### 3. Lancement
 
 Créez un fichier `.env.local` à la racine :
 
@@ -57,8 +72,6 @@ Créez un fichier `.env.local` à la racine :
 NEXT_PUBLIC_SUPABASE_URL=VOTRE_URL_SUPABASE
 NEXT_PUBLIC_SUPABASE_ANON_KEY=VOTRE_CLE_ANON
 ```
-
-### 3. Lancement
 
 ```bash
 # Installez les dépendances
