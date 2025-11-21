@@ -1,62 +1,71 @@
 
-# 🎵 Chronobingo
+# 🕺 DISCO BINGO 2025 💃
 
-> Le bingo musical fun et interactif pour toutes vos soirées !
+Le jeu de bingo musical ultime pour vos soirées.
 
----
+## 🚀 Installation Rapide
 
-## 🚀 Fonctionnalités
+### 1. Prérequis Base de données (Supabase)
 
-- Créez ou rejoignez une partie instantanément
-- Grille personnalisable (3x3 à 6x6)
-- Ajoutez vos chansons avec recherche intelligente
-- Grille sauvegardée même après rechargement
-- Multijoueur en temps réel
-- Interface bilingue (Français / Anglais)
-- Optimisé mobile & desktop
+1. Créez un projet sur [Supabase](https://supabase.com).
+2. Allez dans le **SQL Editor** et exécutez le script suivant pour créer toutes les tables nécessaires :
 
----
+   ```sql
+   -- 1. Table Principale (Etat du jeu)
+   create table gamestates (
+     id text primary key,
+     data jsonb,
+     updated_at timestamp with time zone default timezone('utc'::text, now())
+   );
 
-## 📱 Aperçu
+   -- 2. Table des profils joueurs (Stats, Favoris, Historique)
+   create table profiles (
+     id text primary key,
+     name text,
+     avatar text,
+     favorites jsonb default '[]',
+     history jsonb default '[]',
+     settings jsonb default '{}',
+     stats jsonb default '{"games_played": 0, "games_won": 0, "songs_chosen": 0, "bingos": 0}',
+     updated_at timestamp with time zone default now()
+   );
 
-![Aperçu mobile](public/demo-mobile.png)
-![Aperçu desktop](public/demo-desktop.png)
+   -- 3. Table des chansons (Leaderboard Global)
+   create table global_songs (
+     id text primary key, -- Deezer ID
+     title text,
+     artist text,
+     cover text,
+     preview text,
+     play_count int default 1,
+     last_played_at timestamp with time zone default now()
+   );
 
----
+   -- 4. Désactiver la sécurité restrictive (Mode Invité)
+   alter table gamestates disable row level security;
+   alter table profiles disable row level security;
+   alter table global_songs disable row level security;
+   ```
 
-## 🛠️ Installation
+3. Activez le **Realtime** : Allez dans `Database` -> `Replication` -> Cliquez sur `gamestates` -> Activez `Insert/Update/Delete`.
+
+### 2. Configuration
+
+Créez un fichier `.env.local` à la racine :
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=VOTRE_URL_SUPABASE
+NEXT_PUBLIC_SUPABASE_ANON_KEY=VOTRE_CLE_ANON
+```
+
+### 3. Lancement
 
 ```bash
 # Installez les dépendances
 npm install
 
-# Lancez le serveur de développement
+# Lancez le serveur (accessible sur votre réseau wifi)
 npm run dev
 ```
 
-Accédez à [http://localhost:3000](http://localhost:3000) pour jouer !
-
----
-
-## ✨ Utilisation
-
-1. Entrez votre nom d'utilisateur
-2. Choisissez la taille de la grille
-3. Créez ou rejoignez une partie
-4. Ajoutez des chansons, cochez-les au fur et à mesure
-5. Premier à compléter une ligne, colonne ou diagonale = BINGO !
-
----
-
-## 📦 Déploiement
-
-Déployez sur Vercel, Netlify ou autre :
-- Clonez le repo
-- Configurez les variables d'environnement si besoin
-- Déployez comme une app Next.js
-
----
-
-## 📄 Licence
-
-MIT
+Accédez ensuite à `http://localhost:3000` (ou votre IP locale depuis un mobile).

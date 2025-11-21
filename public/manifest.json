@@ -1,0 +1,25 @@
+
+{
+  "name": "Disco Bingo 2025",
+  "short_name": "DiscoBingo",
+  "theme_color": "#020617",
+  "background_color": "#020617",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "https://api.dicebear.com/7.x/fun-emoji/svg?seed=DiscoApp",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://api.dicebear.com/7.x/fun-emoji/svg?seed=DiscoApp",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

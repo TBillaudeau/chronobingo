@@ -1,0 +1,128 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #020617;
+  color: white;
+  overscroll-behavior-y: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  font-family: 'Outfit', sans-serif;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.1);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+}
+
+/* --- LIQUID GLASS THEME --- */
+
+.glass-liquid {
+  background: rgba(20, 20, 40, 0.4);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.125);
+  box-shadow: 
+    0 4px 30px rgba(0, 0, 0, 0.1),
+    inset 0 0 20px rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+/* No shine effect as requested */
+
+.glass-liquid-strong {
+  background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.neon-text {
+  text-shadow: 
+    0 0 5px #d946ef,
+    0 0 10px #d946ef,
+    0 0 20px #d946ef,
+    0 0 40px #a855f7;
+}
+
+.neon-text-blue {
+  text-shadow: 
+    0 0 5px #06b6d4,
+    0 0 10px #06b6d4,
+    0 0 20px #06b6d4;
+}
+
+/* --- ANIMATIONS --- */
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes popIn {
+  /* Pure Fade In - No bounce */
+  0% { opacity: 0; transform: translateY(5px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes splash {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.98); }
+  100% { transform: scale(1); }
+}
+
+@keyframes wiggle {
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(-1deg); }
+  75% { transform: rotate(1deg); }
+  100% { transform: rotate(0deg); }
+}
+
+/* --- UTILITIES --- */
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-float-fast {
+  animation: float 5s ease-in-out infinite;
+}
+
+.animate-pop {
+  animation: popIn 0.5s ease-out forwards;
+}
+
+.animate-splash {
+  animation: splash 0.3s ease-out;
+}
+
+.animate-wiggle {
+  animation: wiggle 0.25s ease-in-out infinite;
+}
+
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+
+/* Reduced elastic intensity */
+.elastic-active:active {
+  transform: scale(0.98);
+  transition: transform 0.1s ease-out;
+}
+
+.hover-bounce:hover {
+  transform: translateY(-2px);
+}
