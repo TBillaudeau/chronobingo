@@ -1,3 +1,4 @@
+
 import { supabase } from '../lib/supabase';
 
 // Storage Keys (Client side cache)
@@ -5,34 +6,23 @@ const USER_KEY = 'disco_bingo_user';
 const CURRENT_GAME_KEY = 'disco_bingo_current_game'; 
 const GUEST_HISTORY_KEY = 'disco_bingo_guest_history';
 
-// --- Small internal helpers ---
-const isBrowser = () => typeof window !== 'undefined';
-const isGuest = (userId) => !!userId && userId.startsWith('guest-');
-const now = () => Date.now();
-const safeJsonParse = (value, fallback) => {
-  try {
-    return value ? JSON.parse(value) : fallback;
-  } catch {
-    return fallback;
-  }
-};
-
 // --- 1. Auth & User Management ---
 
 export const getLocalUser = () => {
-  if (!isBrowser()) return null;
-  return safeJsonParse(localStorage.getItem(USER_KEY), null);
+  if (typeof window === 'undefined') return null;
+  const stored = localStorage.getItem(USER_KEY);
+  return stored ? JSON.parse(stored) : null;
 };
 
 export const saveLocalUser = (user) => {
-  if (isBrowser() && user) {
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
+  if (typeof window !== 'undefined' && user) {
+      localStorage.setItem(USER_KEY, JSON.stringify(user));
   }
 };
 
 export const removeLocalUser = () => {
-  if (isBrowser()) {
-    localStorage.removeItem(USER_KEY);
+  if (typeof window !== 'undefined') {
+      localStorage.removeItem(USER_KEY);
   }
 };
 
@@ -52,7 +42,7 @@ export const loginWithGoogle = async () => {
     return data;
 };
 
-// Sync user to DB (Upsert)
+// Sync user to DB (Upsert) - Data Minimization: Only ID, Name, Avatar
 export const saveUserToDb = async (user) => {
   if (!user) return;
   
@@ -63,7 +53,7 @@ export const saveUserToDb = async (user) => {
     .from('profiles')
     .upsert({
         id: user.id,
-        name: user.name,
+        name: user.name, // First name only as processed by MainGame
         avatar: user.avatar,
         is_guest: !!user.isGuest,
         updated_at: new Date()
@@ -117,58 +107,64 @@ export const logoutUser = async () => {
 // --- 2. Favorites & Stats Management ---
 
 export const updateUserStats = async (userId, updates) => {
-  if (isGuest(userId)) return;
+    if (userId.startsWith('guest-')) return;
 
-  const profile = await getUserProfile(userId);
-  const currentStats = profile.stats;
+    // Fetch current stats safely
+    const profile = await getUserProfile(userId);
+    const currentStats = profile.stats;
+    
+    const newStats = {
+        games_played: (currentStats.games_played || 0) + (updates.games_played || 0),
+        games_won: (currentStats.games_won || 0) + (updates.games_won || 0),
+        songs_chosen: (currentStats.songs_chosen || 0) + (updates.songs_chosen || 0),
+        bingos: (currentStats.bingos || 0) + (updates.bingos || 0)
+    };
 
-  const newStats = {
-    games_played: (currentStats.games_played || 0) + (updates.games_played || 0),
-    games_won: (currentStats.games_won || 0) + (updates.games_won || 0),
-    songs_chosen: (currentStats.songs_chosen || 0) + (updates.songs_chosen || 0),
-    bingos: (currentStats.bingos || 0) + (updates.bingos || 0),
-  };
-
-  await supabase
-    .from('profiles')
-    .upsert({ id: userId, stats: newStats, updated_at: new Date() });
+    // Use upsert to ensure it writes even if row somehow missing
+    await supabase.from('profiles').upsert({ id: userId, stats: newStats, updated_at: new Date() });
 };
 
 // Helper to update the nested JSONB "song_stats"
 const updatePersonalSongStats = async (userId, song, action) => {
-  if (!song?.id || isGuest(userId)) return;
+    if (!song || !song.id || userId.startsWith('guest-')) return;
 
-  const profile = await getUserProfile(userId);
-  const stats = { ...(profile.song_stats || {}) };
+    const profile = await getUserProfile(userId);
+    let stats = profile.song_stats || {};
+    
+    const sId = song.id.toString();
+    if (!stats[sId]) {
+        stats[sId] = { title: song.title, selected: 0, validated: 0 };
+    }
 
-  const sId = song.id.toString();
-  if (!stats[sId]) {
-    stats[sId] = { title: song.title, selected: 0, validated: 0 };
-  }
+    if (action === 'select') stats[sId].selected += 1;
+    if (action === 'validate') stats[sId].validated += 1;
 
-  if (action === 'select') stats[sId].selected += 1;
-  if (action === 'validate') stats[sId].validated += 1;
-
-  await supabase
-    .from('profiles')
-    .upsert({ id: userId, song_stats: stats, updated_at: new Date() });
+    await supabase.from('profiles').upsert({ id: userId, song_stats: stats, updated_at: new Date() });
 };
 
 export const toggleFavorite = async (userId, song) => {
-  if (isGuest(userId)) return [];
+    if (userId.startsWith('guest-')) return [];
 
-  const profile = await getUserProfile(userId);
-  let favs = profile.favorites || [];
+    const profile = await getUserProfile(userId);
+    // Safe fallback to empty array if null
+    let favs = profile.favorites || []; 
+    
+    const exists = favs.find(f => f.id === song.id);
 
-  const exists = favs.find((f) => f.id === song.id);
-  favs = exists ? favs.filter((f) => f.id !== song.id) : [...favs, song];
+    if (exists) {
+        favs = favs.filter(f => f.id !== song.id);
+    } else {
+        favs = [...favs, song];
+    }
 
-  const { error } = await supabase
-    .from('profiles')
-    .upsert({ id: userId, favorites: favs, updated_at: new Date() });
+    const { error } = await supabase.from('profiles').upsert({ 
+        id: userId, 
+        favorites: favs,
+        updated_at: new Date()
+    });
 
-  if (error) console.error('Error saving favorites:', error);
-  return favs;
+    if (error) console.error("Error saving favorites:", error);
+    return favs;
 };
 
 export const getFavorites = async (userId) => {
@@ -262,43 +258,63 @@ export const removeCurrentGameId = () => {
 // --- 5. History Management ---
 
 const addToHistory = async (game, userId) => {
-  if (!userId || !game) return;
+    if (!userId || !game) return;
+    
+    const summary = {
+        id: game.id,
+        hostName: game.players.find(p => p.id === game.hostId)?.name || 'Unknown',
+        date: Date.now(),
+        status: game.status,
+        myScore: game.players.find(p => p.id === userId)?.score || 0,
+        userId: userId
+    };
 
-  const summary = {
-    id: game.id,
-    hostName: game.players.find((p) => p.id === game.hostId)?.name || 'Unknown',
-    date: now(),
-    status: game.status,
-    myScore: game.players.find((p) => p.id === userId)?.score || 0,
-    userId,
-  };
+    // 5a. Guest History (LocalStorage)
+    if (userId.startsWith('guest-')) {
+        if (typeof window === 'undefined') return;
+        let localHistory = [];
+        try {
+            const stored = localStorage.getItem(GUEST_HISTORY_KEY);
+            if (stored) localHistory = JSON.parse(stored);
+        } catch(e) {}
 
-  if (isGuest(userId)) {
-    if (!isBrowser()) return;
-    const stored = safeJsonParse(localStorage.getItem(GUEST_HISTORY_KEY), []);
-    const localHistory = [{ ...summary }, ...stored.filter((h) => h.id !== game.id)].slice(0, 10);
-    localStorage.setItem(GUEST_HISTORY_KEY, JSON.stringify(localHistory));
-    return;
-  }
+        localHistory = localHistory.filter(h => h.id !== game.id);
+        localHistory.unshift(summary);
+        localHistory = localHistory.slice(0, 10);
+        
+        localStorage.setItem(GUEST_HISTORY_KEY, JSON.stringify(localHistory));
+        return;
+    }
 
-  const profile = await getUserProfile(userId);
-  const history = [{ ...summary }, ...(profile.history || []).filter((h) => h.id !== game.id)].slice(0, 20);
+    // 5b. Real User History (Supabase)
+    const profile = await getUserProfile(userId);
+    let history = profile.history || []; // Safe default
+    
+    history = history.filter(h => h.id !== game.id);
+    history.unshift(summary);
+    history = history.slice(0, 20);
 
-  const { error } = await supabase
-    .from('profiles')
-    .upsert({ id: userId, history, updated_at: new Date() });
-
-  if (error) console.error('Error saving history:', error);
+    const { error } = await supabase.from('profiles').upsert({ 
+        id: userId, 
+        history: history,
+        updated_at: new Date()
+    });
+    
+    if (error) console.error("Error saving history:", error);
 };
 
 export const getGameHistory = async (userId) => {
-  if (isGuest(userId)) {
-    if (!isBrowser()) return [];
-    return safeJsonParse(localStorage.getItem(GUEST_HISTORY_KEY), []);
-  }
-
-  const profile = await getUserProfile(userId);
-  return profile.history;
+    if (userId && userId.startsWith('guest-')) {
+        if (typeof window === 'undefined') return [];
+        try {
+            const stored = localStorage.getItem(GUEST_HISTORY_KEY);
+            return stored ? JSON.parse(stored) : [];
+        } catch(e) { return []; }
+    }
+    
+    // Real User - getUserProfile guarantees an array return
+    const profile = await getUserProfile(userId);
+    return profile.history;
 };
 
 // --- 6. Game Logic (Realtime) ---

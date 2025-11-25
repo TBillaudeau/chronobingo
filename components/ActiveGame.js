@@ -292,7 +292,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
               </div>
               <header className="w-full flex justify-between items-center mb-8 z-10 relative">
                   <div className="flex-1"></div>
-                  <button onClick={() => { hapticClick(); removeCurrentGameId(); onLeave(); }} className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-full hover:bg-white/20 transition-colors">✕</button>
+                  <button onClick={() => { hapticClick(); removeCurrentGameId(); onLeave(); }} className="w-12 h-12 flex items-center justify-center bg-white/10 rounded-full hover:bg-white/20 transition-colors backdrop-blur-md shadow-lg border border-white/20 text-xl font-bold">✕</button>
               </header>
               <div className="z-20 flex flex-col items-center w-full">
                   <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-600 neon-text mb-2">{t(lang, 'game.gameOver')}</h1>
@@ -302,7 +302,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                       {winners.map((p, i) => (
                           <div key={p.id} className={`flex items-center p-4 rounded-3xl ${i===0 ? 'bg-gradient-to-r from-yellow-500/20 to-yellow-600/20 border border-yellow-500' : 'glass-liquid'} animate-pop`} style={{ animationDelay: `${i*0.2}s` }}>
                               <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-xl mr-4 ${i===0 ? 'bg-yellow-500 text-black' : i===1 ? 'bg-slate-300 text-black' : i===2 ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-500'}`}>{i+1}</div>
-                              <img src={p.avatar} className="w-14 h-14 rounded-full border-2 border-white/10 mr-4" alt="avt" />
+                              <img src={p.avatar} className="w-14 h-14 rounded-full border-2 border-white/10 mr-4 object-cover" alt="avt" />
                               <div className="flex-1">
                                   <p className="text-xl font-bold text-white">{p.name}</p>
                                   <p className="text-xs text-slate-400 font-black uppercase">{p.bingoCount} BINGO</p>
@@ -311,7 +311,6 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                           </div>
                       ))}
                   </div>
-                  <button onClick={() => { hapticClick(); removeCurrentGameId(); onLeave(); }} className="mt-12 px-8 py-4 bg-white text-slate-900 font-black rounded-2xl shadow-xl elastic-active z-30 relative">{t(lang, 'game.close')}</button>
               </div>
           </div>
       )
@@ -350,7 +349,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
             </button>
         ) : (
             <div className="w-10 h-10 rounded-full border-2 border-fuchsia-500 overflow-hidden cursor-pointer elastic-active shadow-[0_0_10px_rgba(217,70,239,0.5)]" onClick={() => { hapticClick(); onNavigateToProfile(); }}>
-                <img src={currentUser.avatar} alt="Me" />
+                <img src={currentUser.avatar} alt="Me" className="object-cover w-full h-full"/>
             </div>
         )}
       </header>
@@ -426,11 +425,11 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                 )}
                             </>
                         ) : (
-                            <div className="flex flex-col items-center gap-1 opacity-50 hover:opacity-100 transition-opacity">
+                            <div className="flex flex-col items-center gap-1 opacity-50 hover:opacity-100 transition-opacity cursor-copy">
                                 <div className="w-8 h-8 rounded-full bg-cyan-500/20 border-2 border-cyan-500 flex items-center justify-center text-cyan-400">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
                                 </div>
-                                {game.status === 'playing' && <span className="text-[8px] font-black uppercase text-cyan-400">Ajouter</span>}
+                                <span className="text-[8px] font-black uppercase text-cyan-400">Ajouter</span>
                             </div>
                         )}
                     </div>
@@ -465,7 +464,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                       {opponents.map(p => (
                         <div key={p.id} className={`glass-liquid p-4 rounded-3xl ${p.bingoCount > 0 ? 'border-yellow-400/50 shadow-[0_0_30px_rgba(234,179,8,0.2)]' : ''}`}>
                            <div className="flex items-center gap-3 mb-4">
-                              <img src={p.avatar} className="w-10 h-10 rounded-full border-2 border-slate-600" alt="avt" />
+                              <img src={p.avatar} className="w-10 h-10 rounded-full border-2 border-slate-600 object-cover" alt="avt" />
                               <div className="min-w-0 flex-1">
                                 <p className="text-sm font-bold text-white">{p.name}</p>
                                 {p.bingoCount > 0 && <p className="text-[10px] text-yellow-400 font-black animate-bounce uppercase">🏆 {t(lang, 'game.bingo')}</p>}
@@ -519,7 +518,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                 {game.players.sort((a, b) => b.score - a.score).map((p, i) => (
                     <div key={p.id} className={`flex items-center p-4 rounded-2xl border ${p.id === currentUser.id ? 'bg-slate-800 border-cyan-500 shadow-lg' : 'glass-liquid border-transparent'}`}>
                         <div className={`font-black w-8 text-center mr-2 ${i===0?'text-yellow-400 text-xl': 'text-slate-500'}`}>{i+1}</div>
-                        <img src={p.avatar} className="w-12 h-12 rounded-full mr-4 border-2 border-slate-700" alt="avt" />
+                        <img src={p.avatar} className="w-12 h-12 rounded-full mr-4 border-2 border-slate-700 object-cover" alt="avt" />
                         <div className="flex-1">
                             <p className="font-bold text-base text-white">{p.name} {p.id === game.hostId && '👑'}</p>
                             <p className="text-xs text-slate-400 font-bold uppercase">{p.bingoCount > 0 ? `🔥 ${p.bingoCount} BINGO!` : t(lang, 'game.playing')}</p>
