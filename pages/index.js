@@ -9,7 +9,7 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>DiscoBingo 2025</title>
+        <title>Bingologic</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       </Head>
       <MainGame />

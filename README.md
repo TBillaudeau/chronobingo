@@ -1,5 +1,5 @@
 
-# 🕺 DISCO BINGO 2025 💃
+# 🕺 BINGOLOGIC 💃
 
 Le jeu de bingo musical ultime pour vos soirées.
 

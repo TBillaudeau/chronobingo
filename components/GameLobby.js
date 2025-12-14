@@ -127,9 +127,9 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
     });
   };
 
-  const handleLogout = async () => {
+  const handleGuestConnect = async () => {
     await logoutUser();
-    window.location.reload();
+    onRequestLogin({});
   };
 
   return (
@@ -151,7 +151,7 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={handleLogout}
+                onClick={handleGuestConnect}
                 className="px-4 py-2 bg-fuchsia-600 text-white text-xs font-black rounded-xl hover:bg-fuchsia-500 transition-colors shadow-lg"
               >
                 {t(lang, 'lobby.guestLogin')}

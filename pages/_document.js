@@ -11,6 +11,7 @@ export default function Document() {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <link rel="icon" href="/icon.svg" />
       </Head>
       <body className="bg-[#020617] text-white overscroll-none">
         <Main />
