@@ -9,6 +9,7 @@ export default function Document() {
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#020617" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </Head>
       <body className="bg-[#020617] text-white overscroll-none">

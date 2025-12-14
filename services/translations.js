@@ -35,7 +35,14 @@ export const dictionary = {
       modeNoDuplicates: "Mode Sans Doublons",
       modeNoDuplicatesDesc: "Une chanson ne peut être choisie que par un seul joueur.",
       modeLateJoin: "Autoriser les retardataires",
-      modeLateJoinDesc: "Les joueurs peuvent rejoindre après le début."
+      modeLateJoinDesc: "Les joueurs peuvent rejoindre après le début.",
+      btnJoin: "Rejoindre",
+      notConnected: "Tu n'es pas connecté",
+      loginToPlay: "Connecte-toi pour créer ou rejoindre une partie !",
+      guestMode: "Mode Invité",
+      guestModeDesc: "Connecte-toi pour faire +",
+      guestLogin: "CONNEXION",
+      guestSettings: "Paramètres"
     },
     game: {
       statusPlaying: "EN COURS",
@@ -80,7 +87,18 @@ export const dictionary = {
       btnBack: "Retour",
       btnLogout: "Se Déconnecter",
       won: "Gagné",
-      rank: "Rang"
+      rank: "Rang",
+      guestRole: "Invité",
+      vipRole: "Membre VIP",
+      connectForStats: "Connecte-toi pour voir tes stats !",
+      statGames: "Parties",
+      statWins: "Victoires",
+      statRatio: "Ratio",
+      topsFlops: "Mes Tops & Flops",
+      tops: "TOPS 🍀",
+      flops: "FLOPS 💀",
+      winRate: "win",
+      quitGuest: "Quitter le mode Invité"
     }
   },
   en: {
@@ -118,7 +136,14 @@ export const dictionary = {
       modeNoDuplicates: "No Duplicates Mode",
       modeNoDuplicatesDesc: "A song can only be picked by one player.",
       modeLateJoin: "Allow Late Joiners",
-      modeLateJoinDesc: "Players can join after the game has started."
+      modeLateJoinDesc: "Players can join after the game has started.",
+      btnJoin: "Join",
+      notConnected: "You are not connected",
+      loginToPlay: "Login to create or join a game!",
+      guestMode: "Guest Mode",
+      guestModeDesc: "Log in to do more",
+      guestLogin: "LOGIN",
+      guestSettings: "Settings"
     },
     game: {
       statusPlaying: "PLAYING",
@@ -163,7 +188,18 @@ export const dictionary = {
       btnBack: "Back",
       btnLogout: "Logout",
       won: "Won",
-      rank: "Rank"
+      rank: "Rank",
+      guestRole: "Guest",
+      vipRole: "VIP Member",
+      connectForStats: "Login to see your stats!",
+      statGames: "Games",
+      statWins: "Wins",
+      statRatio: "Ratio",
+      topsFlops: "My Tops & Flops",
+      tops: "TOPS 🍀",
+      flops: "FLOPS 💀",
+      winRate: "win",
+      quitGuest: "Quit Guest Mode"
     }
   }
 };
@@ -177,11 +213,11 @@ export const getBrowserLanguage = () => {
 export const t = (lang, path) => {
   const keys = path.split('.');
   let current = dictionary[lang];
-  
+
   for (const key of keys) {
     if (current[key] === undefined) return path;
     current = current[key];
   }
-  
+
   return current;
 };
