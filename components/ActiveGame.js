@@ -446,7 +446,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                             <div className="w-8 h-8 rounded-full bg-cyan-500/20 border-2 border-cyan-500 flex items-center justify-center text-cyan-400">
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
                                             </div>
-                                            <span className="text-[8px] font-black uppercase text-cyan-400">Ajouter</span>
+                                            <span className="text-[8px] font-black uppercase text-cyan-400">{t(lang, 'game.btnAdd')}</span>
                                         </div>
                                     )}
                                 </div>

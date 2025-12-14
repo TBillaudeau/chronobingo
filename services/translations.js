@@ -100,7 +100,9 @@ export const dictionary = {
       tops: "TOPS 🍀",
       flops: "FLOPS 💀",
       winRate: "win",
-      quitGuest: "Quitter le mode Invité"
+      quitGuest: "Quitter le mode Invité",
+      deleteAccount: "Supprimer mon compte",
+      deleteConfirm: "Es-tu sûr de vouloir supprimer ton compte ? Cette action est irréversible et effacera toutes tes statistiques et favoris."
     }
   },
   en: {
@@ -203,7 +205,9 @@ export const dictionary = {
       tops: "TOPS 🍀",
       flops: "FLOPS 💀",
       winRate: "win",
-      quitGuest: "Quit Guest Mode"
+      quitGuest: "Quit Guest Mode",
+      deleteAccount: "Delete my account",
+      deleteConfirm: "Are you sure you want to delete your account? This action is irreversible and will erase all your stats and favorites."
     }
   }
 };

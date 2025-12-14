@@ -103,6 +103,28 @@ export const logoutUser = async () => {
   await supabase.auth.signOut();
 };
 
+export const deleteUserAccount = async (userId) => {
+  if (!userId) return;
+
+  // Call our new API route
+  const response = await fetch('/api/delete-account', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ userId }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Failed to delete account');
+  }
+
+  // Logout locally
+  await logoutUser();
+};
+
 // --- 2. Favorites & Stats Management ---
 
 export const updateUserStats = async (userId, updates) => {

@@ -201,7 +201,7 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
                   <div>
                     <p className="font-black text-white tracking-wider font-mono text-lg group-hover:text-cyan-400 transition-colors">{game.id}</p>
                     <p className="text-xs text-slate-400 uppercase font-bold">
-                      {t(lang, 'lobby.host')}: <span className="text-slate-300">{game.hostName}</span> • {formatDate(game.date)} ({formatTimeAgo(game.date)})
+                      {t(lang, 'lobby.host')}: <span className="text-slate-300">{game.hostName}</span> • {formatDate(game.date)} • ({formatTimeAgo(game.date)})
                     </p>
                   </div>
                 </div>

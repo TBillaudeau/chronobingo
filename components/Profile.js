@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { getUserProfile, toggleFavorite, logoutUser, getGameHistory } from '../services/gameService';
+import { getUserProfile, toggleFavorite, logoutUser, getGameHistory, deleteUserAccount } from '../services/gameService';
 import { searchSongs } from '../services/music';
 import { t } from '../services/translations';
 
@@ -92,6 +92,18 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
     const handleLogout = async () => {
         await logoutUser();
         window.location.reload();
+    };
+
+    const handleDeleteAccount = async () => {
+        if (window.confirm(t(lang, 'profile.deleteConfirm'))) {
+            try {
+                await deleteUserAccount(user.id);
+                window.location.reload();
+            } catch (error) {
+                console.error("Delete Account Error:", error);
+                alert("Error deleting account: " + (error.message || "Unknown error"));
+            }
+        }
     };
 
     const formatDate = (timestamp) => {
@@ -318,6 +330,19 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
                                     ))}
                                 </div>
                             </div>
+
+
+                            <div>
+                                <label className="block text-xs font-black text-slate-400 mb-3 uppercase tracking-widest">Credits</label>
+                                <div className="bg-black/20 rounded-2xl p-4 text-xs text-slate-400 space-y-2 font-medium">
+                                    <p className="flex items-center gap-2">
+                                        <span>🎵</span> Music data provided by <span className="text-white font-bold">Deezer</span>
+                                    </p>
+                                    <p className="flex items-center gap-2">
+                                        <span>👾</span> Avatars by <a href="https://dicebear.com" target="_blank" rel="noopener noreferrer" className="text-white hover:underline">DiceBear</a> (CC BY 4.0)
+                                    </p>
+                                </div>
+                            </div>
                         </div>
 
                         <button
@@ -326,10 +351,28 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
                         >
                             {user.isGuest ? t(lang, 'profile.quitGuest') : t(lang, 'profile.btnLogout')}
                         </button>
+
+                        {!user.isGuest && (
+                            <button
+                                onClick={handleDeleteAccount}
+                                className="w-full py-4 bg-transparent border border-slate-700 text-slate-500 font-bold rounded-2xl hover:bg-red-900/20 hover:text-red-400 hover:border-red-900/50 transition-all text-sm"
+                            >
+                                {t(lang, 'profile.deleteAccount')}
+                            </button>
+                        )}
+
+                        <a
+                            href="/privacy"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block w-full py-3 text-center text-xs text-slate-500 hover:text-slate-300 transition-colors underline"
+                        >
+                            {lang === 'fr' ? 'Politique de Confidentialité & Mentions Légales' : 'Privacy Policy & Legal Notice'}
+                        </a>
                     </div>
                 )}
             </div>
-        </div>
+        </div >
     );
 };
 
