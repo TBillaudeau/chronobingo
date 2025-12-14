@@ -40,7 +40,7 @@ const Login = ({ lang, onLogin, initialCode }) => {
   };
 
   const renderTitle = () => {
-    return "BINGOLOGIC".split('').map((char, index) => (
+    return "CHRONOBINGO".split('').map((char, index) => (
       <span key={index} className="inline-block animate-float" style={{ animationDelay: `${index * 0.1}s` }}>
         {char === ' ' ? '\u00A0' : char}
       </span>
@@ -131,7 +131,7 @@ const Login = ({ lang, onLogin, initialCode }) => {
       </div>
 
       <div className="mt-8 text-[10px] text-slate-500 flex flex-col items-center gap-1 animate-pop delay-300">
-        <p>Music data provided by <span className="font-bold text-slate-400">Deezer</span></p>
+        <p>Music data provided by <a href="https://www.deezer.com" target="_blank" rel="noopener noreferrer" className="font-bold text-slate-400 hover:text-slate-300 transition-colors">Deezer</a></p>
         <p>Avatars by <a href="https://dicebear.com" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">DiceBear</a> (CC BY 4.0)</p>
         <p className="mt-2 text-[9px] opacity-70">
           {lang === 'fr' ? "Tes données (email, nom, avatar) sont utilisées uniquement pour l'identification et le jeu." : "Your data (email, name, avatar) is used solely for authentication and gameplay."}

@@ -139,29 +139,31 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
       {user ? (
         user.isGuest ? (
           /* Guest Banner */
-          <div className="w-full glass-liquid bg-fuchsia-900/20 border-fuchsia-500/30 p-4 rounded-3xl mb-8 flex items-center justify-between animate-slide-up">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-fuchsia-500/20 flex items-center justify-center text-2xl border border-fuchsia-500/50">
-                ✨
+          <div
+            className="w-full glass-liquid bg-fuchsia-900/20 border-fuchsia-500/30 p-4 rounded-3xl mb-8 cursor-pointer group hover:border-fuchsia-500/50 transition-all animate-slide-up"
+            onClick={() => { hapticClick(); onNavigateToProfile(); }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 shrink-0 aspect-square rounded-full bg-fuchsia-500/20 flex items-center justify-center text-2xl border border-fuchsia-500/50">
+                  ✨
+                </div>
+                <div>
+                  <p className="text-white font-black text-lg leading-tight">{t(lang, 'lobby.guestMode')}</p>
+                  <p className="text-fuchsia-300 text-xs font-bold">{t(lang, 'lobby.guestModeDesc')}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-white font-black text-lg leading-tight">{t(lang, 'lobby.guestMode')}</p>
-                <p className="text-fuchsia-300 text-xs font-bold">{t(lang, 'lobby.guestModeDesc')}</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleGuestConnect(); }}
+                  className="px-4 py-2 bg-fuchsia-600 text-white text-xs font-black rounded-xl hover:bg-fuchsia-500 transition-colors shadow-lg"
+                >
+                  {t(lang, 'lobby.guestLogin')}
+                </button>
+                <div className="w-10 h-10 shrink-0 aspect-square bg-white/10 rounded-xl flex items-center justify-center group-hover:bg-white/20 transition-colors text-white">
+                  ⚙️
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleGuestConnect}
-                className="px-4 py-2 bg-fuchsia-600 text-white text-xs font-black rounded-xl hover:bg-fuchsia-500 transition-colors shadow-lg"
-              >
-                {t(lang, 'lobby.guestLogin')}
-              </button>
-              <button
-                onClick={onNavigateToProfile}
-                className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-colors text-white"
-              >
-                ⚙️
-              </button>
             </div>
           </div>
         ) : (

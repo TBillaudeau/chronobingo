@@ -5,7 +5,7 @@ export default function PrivacyPolicy() {
     return (
         <div className="min-h-screen bg-slate-900 text-slate-300 p-8 font-sans">
             <Head>
-                <title>Politique de Confidentialité - Bingologic</title>
+                <title>Politique de Confidentialité - Chronobingo</title>
             </Head>
 
             <div className="max-w-3xl mx-auto space-y-8">
@@ -20,7 +20,7 @@ export default function PrivacyPolicy() {
                     <p className="text-sm text-slate-500">Dernière mise à jour : 14 Décembre 2025</p>
 
                     <p>
-                        Bienvenue sur <strong>Bingologic</strong>. Cette application est un projet personnel développé pour le divertissement entre amis.
+                        Bienvenue sur <strong>Chronobingo</strong>. Cette application est un projet personnel développé pour le divertissement entre amis.
                         Nous prenons votre vie privée au sérieux, même pour un petit projet !
                     </p>
                 </div>
@@ -81,7 +81,7 @@ export default function PrivacyPolicy() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-slate-800/50 p-4 rounded-xl">
                             <h3 className="font-bold text-fuchsia-400 mb-2">Éditeur du site</h3>
-                            <p>Le site Bingologic est édité à titre personnel.</p>
+                            <p>Le site Chronobingo est édité à titre personnel.</p>
                             <p className="text-sm text-slate-400 mt-1">Responsable de la publication : L'administrateur du projet.</p>
                         </div>
                         <div className="bg-slate-800/50 p-4 rounded-xl">

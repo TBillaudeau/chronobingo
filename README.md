@@ -1,5 +1,5 @@
 
-# 🕺 BINGOLOGIC 💃
+# 🕺 CHRONOBINGO 💃
 
 Le jeu de bingo musical ultime pour vos soirées.
 

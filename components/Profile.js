@@ -336,7 +336,7 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
                                 <label className="block text-xs font-black text-slate-400 mb-3 uppercase tracking-widest">Credits</label>
                                 <div className="bg-black/20 rounded-2xl p-4 text-xs text-slate-400 space-y-2 font-medium">
                                     <p className="flex items-center gap-2">
-                                        <span>🎵</span> Music data provided by <span className="text-white font-bold">Deezer</span>
+                                        <span>🎵</span> Music data provided by <a href="https://www.deezer.com" target="_blank" rel="noopener noreferrer" className="text-white font-bold hover:underline">Deezer</a>
                                     </p>
                                     <p className="flex items-center gap-2">
                                         <span>👾</span> Avatars by <a href="https://dicebear.com" target="_blank" rel="noopener noreferrer" className="text-white hover:underline">DiceBear</a> (CC BY 4.0)
