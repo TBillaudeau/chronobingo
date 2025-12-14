@@ -314,7 +314,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                         onClick={() => setShowGridOnGameOver(true)}
                         className="px-8 py-4 bg-white/10 border border-white/20 rounded-2xl font-black text-white uppercase tracking-widest hover:bg-white/20 transition-all elastic-active"
                     >
-                        Voir ma grille
+                        {t(lang, 'game.viewGrid')}
                     </button>
                 </div>
             </div>
@@ -331,9 +331,11 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
 
             {/* Header - Cleaned up style (No glass-liquid borders) */}
             <header className="px-4 py-3 flex justify-between items-center sticky top-0 z-30 mb-4 backdrop-blur-md bg-slate-900/30 border-b border-white/5">
-                <button onClick={() => { hapticClick(); removeCurrentGameId(); onLeave(); }} className="text-slate-400 hover:text-white p-2 elastic-active">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
-                </button>
+                <div className="flex-1 flex justify-start">
+                    <button onClick={() => { hapticClick(); removeCurrentGameId(); onLeave(); }} className="text-slate-400 hover:text-white p-2 elastic-active">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
+                    </button>
+                </div>
 
                 <div className="flex flex-col items-center">
                     <div className={`text-[10px] font-black px-3 py-1 rounded-full mb-1 uppercase tracking-widest ${game.status === 'playing' ? 'bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-yellow-500 text-white shadow-[0_0_10px_rgba(234,179,8,0.5)]'}`}>
@@ -352,20 +354,21 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                         onClick={() => setShowGridOnGameOver(false)}
                         className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2 bg-yellow-500 text-black font-black rounded-full shadow-lg animate-bounce"
                     >
-                        🏆 PODIUM
+                        🏆 {t(lang, 'game.viewPodium')}
                     </button>
                 )}
 
                 {/* HOST FINISH BUTTON */}
-                {isHost && game.status === 'playing' ? (
-                    <button onClick={handleFinishGame} className="w-10 h-10 bg-red-500/20 border border-red-500 text-red-500 rounded-full flex items-center justify-center elastic-active shadow-[0_0_10px_rgba(239,68,68,0.4)]">
-                        🛑
-                    </button>
-                ) : (
+                <div className="flex-1 flex justify-end items-center gap-3">
+                    {isHost && game.status === 'playing' && (
+                        <button onClick={handleFinishGame} className="w-10 h-10 bg-red-500/20 border border-red-500 text-red-500 rounded-full flex items-center justify-center elastic-active shadow-[0_0_10px_rgba(239,68,68,0.4)]">
+                            🛑
+                        </button>
+                    )}
                     <div className="w-10 h-10 rounded-full border-2 border-fuchsia-500 overflow-hidden cursor-pointer elastic-active shadow-[0_0_10px_rgba(217,70,239,0.5)]" onClick={() => { hapticClick(); onNavigateToProfile(); }}>
                         <img src={currentUser.avatar} alt="Me" className="object-cover w-full h-full" />
                     </div>
-                )}
+                </div>
             </header>
 
             {/* Tabs */}

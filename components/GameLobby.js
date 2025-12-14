@@ -11,6 +11,37 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [noDuplicates, setNoDuplicates] = useState(false);
+  const [playingUrl, setPlayingUrl] = useState(null);
+  const audioRef = React.useRef(null);
+
+  const toggleAudio = (url) => {
+    if (!url) return;
+    if (playingUrl === url) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      setPlayingUrl(null);
+    } else {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      const audio = new Audio(url);
+      audio.volume = 0.5;
+      audio.play().catch(e => console.error("Audio play error:", e));
+      audio.onended = () => setPlayingUrl(null);
+      audioRef.current = audio;
+      setPlayingUrl(url);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     getGlobalLeaderboard().then(setTopSongs);
@@ -273,14 +304,29 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
               <div className={`font-black text-xl w-10 h-10 flex items-center justify-center rounded-xl mr-3 shadow-inner ${i === 0 ? 'bg-yellow-400 text-yellow-900' : i === 1 ? 'bg-slate-300 text-slate-900' : i === 2 ? 'bg-amber-700 text-amber-100' : 'bg-slate-800 text-slate-500'}`}>
                 {i + 1}
               </div>
-              <img src={song.cover} className="w-12 h-12 rounded-xl shadow-md group-hover:scale-110 transition-transform duration-300" alt="Cover" />
+
+              <div className="relative w-12 h-12 shrink-0">
+                <img src={song.cover} className="w-full h-full rounded-xl shadow-md group-hover:scale-110 transition-transform duration-300 object-cover" alt="Cover" />
+                {song.preview && (
+                  <div className="absolute -bottom-2 -right-2 z-20">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleAudio(song.preview); }}
+                      className={`w-6 h-6 rounded-full flex items-center justify-center shadow-lg backdrop-blur-md border transition-all ${playingUrl === song.preview ? 'bg-cyan-500 border-cyan-400 text-white animate-pulse' : 'bg-black/60 border-white/20 text-white hover:bg-cyan-500 hover:border-cyan-400'}`}
+                    >
+                      {playingUrl === song.preview ? (
+                        <div className="w-1.5 h-1.5 bg-white rounded-[1px]"></div>
+                      ) : (
+                        <svg className="w-2.5 h-2.5 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="flex-1 min-w-0 ml-4">
                 <p className="font-bold text-white truncate text-lg">{song.title}</p>
                 <p className="text-xs text-slate-400 truncate font-medium uppercase tracking-wide">{song.artist}</p>
               </div>
-              <div className="text-right ml-4 px-4 py-1 rounded-full bg-slate-900/50 border border-white/5">
-                <span className="font-mono text-emerald-400 font-bold text-sm">{(song.validation_count || 0).toLocaleString()} Wins</span>
-              </div>
+
             </div>
           ))}
         </div>

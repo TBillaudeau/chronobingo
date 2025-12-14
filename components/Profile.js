@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { getUserProfile, toggleFavorite, logoutUser, getGameHistory } from '../services/gameService';
+import { searchSongs } from '../services/music';
 import { t } from '../services/translations';
 
 const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame }) => {
@@ -10,7 +11,25 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
     const [stats, setStats] = useState(null);
     const [songStats, setSongStats] = useState({});
     const [playingUrl, setPlayingUrl] = useState(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [searching, setSearching] = useState(false);
     const audioRef = useRef(null);
+
+    useEffect(() => {
+        if (activeTab !== 'favorites') return;
+        const delayDebounceFn = setTimeout(async () => {
+            if (searchTerm.length > 2) {
+                setSearching(true);
+                const results = await searchSongs(searchTerm);
+                setSearchResults(results);
+                setSearching(false);
+            } else {
+                setSearchResults([]);
+            }
+        }, 500);
+        return () => clearTimeout(delayDebounceFn);
+    }, [searchTerm, activeTab]);
 
     useEffect(() => {
         const loadData = async () => {
@@ -215,32 +234,68 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
 
                 {activeTab === 'favorites' && !user.isGuest && (
                     <div className="space-y-3">
-                        {favorites.length === 0 ? (
+                        {/* Search Input */}
+                        <div className="relative mb-4">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <svg className="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            </div>
+                            <input
+                                type="text"
+                                placeholder={t(lang, 'game.searchTitle')}
+                                className="w-full bg-black/20 text-white pl-11 pr-4 py-4 rounded-2xl border border-white/10 focus:border-fuchsia-500/50 focus:ring-2 focus:ring-fuchsia-500/20 outline-none transition-all text-lg placeholder-slate-500 font-medium backdrop-blur-sm"
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+
+                        {(searchTerm.length > 2 ? searchResults : favorites).length === 0 ? (
                             <div className="text-center py-12 glass-liquid rounded-3xl">
-                                <span className="text-5xl mb-4 block opacity-50">💔</span>
-                                <p className="text-slate-400 font-bold">{t(lang, 'profile.noFavs')}</p>
+                                <span className="text-5xl mb-4 block opacity-50">{searchTerm.length > 2 ? '🔍' : '💔'}</span>
+                                <p className="text-slate-400 font-bold">{searchTerm.length > 2 ? 'Aucun résultat' : t(lang, 'profile.noFavs')}</p>
                             </div>
                         ) : (
-                            favorites.map(song => (
-                                <div key={song.id} className="flex items-center gap-4 p-4 rounded-2xl glass-liquid border-transparent hover:border-fuchsia-500/30 transition-all">
-                                    {song.preview && (
+                            (searchTerm.length > 2 ? searchResults : favorites).map((song, i) => {
+                                const isFav = favorites.find(f => f.id === song.id);
+                                return (
+                                    <div key={song.id} className="group flex items-center gap-4 p-3 rounded-2xl hover:bg-white/5 cursor-default transition-all border border-transparent hover:border-white/10 animate-pop" style={{ animationDelay: `${i * 0.05}s` }}>
+
+                                        <div className="relative w-16 h-16 shrink-0">
+                                            <img src={song.cover} className="w-full h-full rounded-xl shadow-lg object-cover group-hover:scale-105 transition-transform duration-300" alt="cover" />
+
+                                            {song.preview && (
+                                                <div className="absolute -bottom-2 -right-2 z-20">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); toggleAudio(song.preview); }}
+                                                        className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg backdrop-blur-md border transition-all ${playingUrl === song.preview ? 'bg-cyan-500 border-cyan-400 text-white animate-pulse' : 'bg-black/60 border-white/20 text-white hover:bg-cyan-500 hover:border-cyan-400'}`}
+                                                    >
+                                                        {playingUrl === song.preview ? (
+                                                            <div className="w-2 h-2 bg-white rounded-[1px]"></div>
+                                                        ) : (
+                                                            <svg className="w-3 h-3 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-bold text-white truncate text-lg group-hover:text-cyan-300 transition-colors">{song.title}</p>
+                                            <p className="text-xs text-slate-400 truncate uppercase tracking-wide font-bold mt-0.5">{song.artist}</p>
+                                        </div>
+
                                         <button
-                                            onClick={() => toggleAudio(song.preview)}
-                                            className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-all shadow-lg ${playingUrl === song.preview ? 'bg-cyan-500 text-white animate-pulse' : 'bg-slate-800 text-slate-400 hover:bg-white hover:text-slate-900'}`}
+                                            onClick={(e) => { e.stopPropagation(); handleToggleFav(song); }}
+                                            className="p-3 rounded-full hover:bg-white/10 active:scale-90 transition-transform group/heart"
                                         >
-                                            {playingUrl === song.preview ? 'II' : '▶'}
+                                            {isFav ? (
+                                                <svg className="w-6 h-6 text-fuchsia-500 filter drop-shadow-[0_0_8px_rgba(217,70,239,0.5)]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" /></svg>
+                                            ) : (
+                                                <svg className="w-6 h-6 text-slate-600 group-hover/heart:text-fuchsia-400 transition-colors" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                                            )}
                                         </button>
-                                    )}
-                                    <img src={song.cover} className="w-14 h-14 rounded-xl shadow-md" alt="cover" />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-bold text-white truncate text-lg">{song.title}</p>
-                                        <p className="text-xs text-slate-400 truncate font-bold uppercase tracking-wide">{song.artist}</p>
                                     </div>
-                                    <button onClick={() => handleToggleFav(song)} className="text-fuchsia-500 p-2 elastic-active text-2xl">
-                                        ♥
-                                    </button>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 )}

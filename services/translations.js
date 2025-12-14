@@ -73,7 +73,9 @@ export const dictionary = {
       rank: "Rang",
       errorDuplicate: "⛔ Cette chanson est déjà prise par un autre joueur !",
       guestFavWarning: "🔒 Connecte-toi avec Google pour gérer tes favoris !",
-      errorLateJoin: "⛔ La partie a commencé et n'accepte plus de nouveaux joueurs."
+      errorLateJoin: "⛔ La partie a commencé et n'accepte plus de nouveaux joueurs.",
+      viewGrid: "Voir ma grille",
+      viewPodium: "PODIUM"
     },
     profile: {
       title: "Mon Profil",
@@ -174,7 +176,9 @@ export const dictionary = {
       rank: "Rank",
       errorDuplicate: "⛔ This song is already taken by another player!",
       guestFavWarning: "🔒 Login with Google to manage favorites!",
-      errorLateJoin: "⛔ The game has started and is closed to new players."
+      errorLateJoin: "⛔ The game has started and is closed to new players.",
+      viewGrid: "View my grid",
+      viewPodium: "PODIUM"
     },
     profile: {
       title: "My Profile",
