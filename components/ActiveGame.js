@@ -4,6 +4,7 @@ import { updatePlayerGrid, updateGame, subscribeToGame, toggleFavorite, getFavor
 import { searchSongs, getTrendingSongs } from '../services/music';
 import { t } from '../services/translations';
 import { hapticClick, hapticFeedback, hapticSuccess, hapticError } from '../services/haptics';
+import { sendNotification } from '../services/notifications';
 
 const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onNavigateToProfile }) => {
     const [game, setGame] = useState(initialGame);
@@ -41,13 +42,34 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
     const myPlayer = game.players.find(p => p.id === currentUser.id) || game.players[0];
     const isHost = game.hostId === currentUser.id;
 
+    const prevPlayersRef = useRef(game.players);
+
     useEffect(() => {
-        if (myPlayer && myPlayer.bingoCount > 0) {
-            setShowConfetti(true);
-            hapticSuccess();
-            setTimeout(() => setShowConfetti(false), 5000);
-        }
-    }, [myPlayer?.bingoCount]);
+        // Check for NEW bingos compared to previous render
+        game.players.forEach(player => {
+            const prevPlayer = prevPlayersRef.current.find(p => p.id === player.id);
+            const prevBingoCount = prevPlayer ? prevPlayer.bingoCount : 0;
+
+            if (player.bingoCount > prevBingoCount) {
+                // It's a NEW bingo!
+                if (player.id === currentUser.id) {
+                    // My Bingo
+                    setShowConfetti(true);
+                    hapticSuccess();
+                    setTimeout(() => setShowConfetti(false), 5000);
+                    sendNotification("BINGO ! 🥳", "Bravo ! Tu as fait un BINGO !");
+                } else {
+                    // Opponent Bingo
+                    hapticFeedback(); // Tactile alert
+                    sendNotification("BINGO ADVERSE ! 😱", `${player.name} a crié BINGO !`);
+                }
+            }
+        });
+
+        // Update ref for next render
+        prevPlayersRef.current = game.players;
+
+    }, [game.players, currentUser.id]);
 
     useEffect(() => {
         if (!selectedCellId) return;
@@ -143,7 +165,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
         // Prevent editing if grid is locked (except for marking songs)
         if (isMyGridLocked && !cell.song) {
             hapticError();
-            alert(t(lang, 'game.gridLockedNoEdit'));
+            // Alert removed
             return;
         }
 
@@ -264,7 +286,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
     };
 
     const handleFinishGame = async () => {
-        if (confirm("Terminer la partie ?")) {
+        if (confirm(t(lang, 'game.btnFinish') + " ?")) {
             hapticSuccess();
             await finishGame(game.id);
         }
@@ -273,14 +295,14 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
     const copyCode = () => {
         hapticClick();
         navigator.clipboard.writeText(game.id);
-        alert(t(lang, 'game.copied'));
+        // Alert removed
     }
 
     const shareLink = () => {
         hapticClick();
         const url = `${window.location.origin}?game=${game.id}`;
         navigator.clipboard.writeText(url);
-        alert("Lien copié : " + url);
+        // Alert removed
     }
 
     const switchTab = (newTab) => { hapticClick(); setTab(newTab); }
@@ -346,7 +368,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
                     </button>
                     <button onClick={async () => {
-                        if (confirm("Voulez-vous vraiment quitter la partie ?")) {
+                        if (confirm(t(lang, 'profile.quitGameConfirm'))) {
                             hapticClick();
                             await removePlayer(game.id, currentUser.id);
                             removeCurrentGameId();
@@ -360,8 +382,8 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                 </div>
 
                 <div className="flex flex-col items-center">
-                    <div className={`text-[10px] font-black px-3 py-1 rounded-full mb-1 uppercase tracking-widest ${isMyGridLocked ? 'bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-yellow-500 text-white shadow-[0_0_10px_rgba(234,179,8,0.5)]'}`}>
-                        {isMyGridLocked ? t(lang, 'game.statusPlaying') : t(lang, 'game.statusLobby')}
+                    <div className={`text-[10px] font-black px-3 py-1 rounded-full mb-1 uppercase tracking-widest ${game.status === 'finished' ? 'bg-fuchsia-500 text-white shadow-[0_0_10px_rgba(217,70,239,0.5)]' : isMyGridLocked ? 'bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-yellow-500 text-white shadow-[0_0_10px_rgba(234,179,8,0.5)]'}`}>
+                        {game.status === 'finished' ? t(lang, 'game.statusFinished') : (isMyGridLocked ? t(lang, 'game.statusPlaying') : t(lang, 'game.statusLobby'))}
                     </div>
                     <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-1 border border-white/10">
                         <h1 className="font-black text-lg tracking-widest cursor-pointer elastic-active" onClick={copyCode}>

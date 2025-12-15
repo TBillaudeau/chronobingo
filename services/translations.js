@@ -107,7 +107,10 @@ export const dictionary = {
       winRate: "win",
       quitGuest: "Quitter le mode Invité",
       deleteAccount: "Supprimer mon compte",
-      deleteConfirm: "Es-tu sûr de vouloir supprimer ton compte ? Cette action est irréversible et effacera toutes tes statistiques et favoris."
+      deleteAccount: "Supprimer mon compte",
+      deleteConfirm: "Es-tu sûr de vouloir supprimer ton compte ? Cette action est irréversible et effacera toutes tes statistiques et favoris.",
+      deleteGameConfirm: "Supprimer cette partie ?",
+      quitGameConfirm: "Voulez-vous vraiment quitter la partie ?"
     }
   },
   en: {
@@ -217,7 +220,10 @@ export const dictionary = {
       winRate: "win",
       quitGuest: "Quit Guest Mode",
       deleteAccount: "Delete my account",
-      deleteConfirm: "Are you sure you want to delete your account? This action is irreversible and will erase all your stats and favorites."
+      deleteAccount: "Delete my account",
+      deleteConfirm: "Are you sure you want to delete your account? This action is irreversible and will erase all your stats and favorites.",
+      deleteGameConfirm: "Delete this game from history?",
+      quitGameConfirm: "Do you really want to quit the game?"
     }
   }
 };

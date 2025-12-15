@@ -1,8 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { getUserProfile, toggleFavorite, logoutUser, getGameHistory, deleteUserAccount, removePlayer } from '../services/gameService';
+import { getUserProfile, toggleFavorite, logoutUser, getGameHistory, deleteUserAccount, removePlayer, toggleSaveGame } from '../services/gameService';
+import { requestNotificationPermission, hasNotificationPermission } from '../services/notifications';
 import { searchSongs } from '../services/music';
 import { t } from '../services/translations';
+import { hapticClick } from '../services/haptics';
 
 const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame }) => {
     const [activeTab, setActiveTab] = useState('history'); // Default to history for everyone
@@ -14,7 +16,12 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [searching, setSearching] = useState(false);
+    const [notifEnabled, setNotifEnabled] = useState(false);
     const audioRef = useRef(null);
+
+    useEffect(() => {
+        setNotifEnabled(hasNotificationPermission());
+    }, []);
 
     useEffect(() => {
         if (activeTab !== 'favorites') return;
@@ -224,19 +231,31 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
                             </div>
                         ) : (
                             history.map((game, i) => (
-                                <div key={`${game.id}-${i}`} className="glass-liquid p-5 rounded-3xl flex justify-between items-center hover:bg-white/5 transition-colors group">
+                                <div
+                                    key={`${game.id}-${i}`}
+                                    onClick={() => onRejoinGame(game.id)}
+                                    className="glass-liquid p-5 rounded-3xl flex justify-between items-center hover:bg-white/5 transition-colors group cursor-pointer"
+                                >
                                     <div>
                                         <p className="font-black text-white text-xl tracking-wider">{game.id}</p>
                                         <p className="text-xs text-slate-400 font-bold uppercase mt-1">Host: {game.hostName} • {formatDate(game.date)}</p>
                                     </div>
                                     <div className="text-right flex items-center gap-3">
                                         <span className="block text-fuchsia-400 font-black text-lg">{game.myScore} PTS</span>
-                                        <button
-                                            onClick={() => onRejoinGame(game.id)}
-                                            className="px-4 py-2 bg-white text-slate-900 rounded-xl text-xs font-black hover:bg-cyan-400 hover:text-white transition-colors shadow-lg elastic-active"
-                                        >
-                                            REJOIN
-                                        </button>
+                                        {!user.isGuest && (
+                                            <button
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    hapticClick();
+                                                    await toggleSaveGame(game.id, true);
+                                                    alert("Partie sauvegardée !");
+                                                }}
+                                                className="w-10 h-10 flex items-center justify-center bg-green-500/10 text-green-500 rounded-xl hover:bg-green-500 hover:text-white transition-all shadow-md active:scale-95"
+                                                title="Sauvegarder la partie"
+                                            >
+                                                💾
+                                            </button>
+                                        )}
                                         <button
                                             onClick={async (e) => {
                                                 e.stopPropagation();
@@ -342,6 +361,20 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
                                         </button>
                                     ))}
                                 </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-black text-slate-400 mb-3 uppercase tracking-widest">Notifications</label>
+                                <button
+                                    onClick={async () => {
+                                        const granted = await requestNotificationPermission();
+                                        setNotifEnabled(granted);
+                                        if (granted) hapticClick();
+                                    }}
+                                    className={`w-full py-4 rounded-2xl border-2 font-bold text-sm transition-all elastic-active flex items-center justify-center gap-2 ${notifEnabled ? 'border-green-500 bg-green-500/20 text-white' : 'border-slate-700 text-slate-500 hover:border-slate-500'}`}
+                                >
+                                    <span>{notifEnabled ? '🔔 Notifications Actives' : '🔕 Activer les Notifications'}</span>
+                                </button>
                             </div>
 
 

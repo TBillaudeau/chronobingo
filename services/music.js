@@ -52,8 +52,49 @@ export const getTrendingSongs = async () => {
   }
 };
 
+import { createClient } from '@supabase/supabase-js';
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
 export const getTopPartySongs = async () => {
-  return new Promise(resolve => {
-    setTimeout(() => resolve(FALLBACK_SONGS), 500);
-  });
+  try {
+    // Fetch all user profiles with their song stats
+    const { data: profiles, error } = await supabase
+      .from('profiles')
+      .select('song_stats');
+
+    if (error) throw error;
+
+    // Aggregate stats across all users
+    const songMap = {};
+
+    profiles.forEach(p => {
+      if (p.song_stats) {
+        Object.values(p.song_stats).forEach(songStat => {
+          // Only count VALIDATED (marked) usages, effectively "checked/played" songs
+          // The user requested: "les chansons cochées pas juste mises"
+          if (songStat.validated > 0) {
+            if (!songMap[songStat.id]) {
+              songMap[songStat.id] = { ...songStat, validated: 0 };
+            }
+            // We sum up the 'validated' count (how many times it was checked)
+            songMap[songStat.id].validated += songStat.validated;
+          }
+        });
+      }
+    });
+
+    // Convert to array, sort by validation count, take top 5
+    const topSongs = Object.values(songMap)
+      .sort((a, b) => b.validated - a.validated)
+      .slice(0, 5); // Limit to 5 as requested
+
+    return topSongs;
+
+  } catch (err) {
+    console.warn("Top Songs fetch failed:", err);
+    return FALLBACK_SONGS;
+  }
 };

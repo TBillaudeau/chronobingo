@@ -228,7 +228,7 @@ export const incrementSongPlayCount = async (song) => {
   }
 };
 
-export const incrementSongValidationCount = async (songId) => {
+export const incrementSongValidationCount = async (songId, change = 1) => {
   if (!songId) return;
   const { data: existing } = await supabase
     .from('global_songs')
@@ -237,9 +237,11 @@ export const incrementSongValidationCount = async (songId) => {
     .maybeSingle();
 
   if (existing) {
+    // Ensure we don't go below zero
+    const newCount = Math.max(0, (existing.validation_count || 0) + change);
     await supabase
       .from('global_songs')
-      .update({ validation_count: (existing.validation_count || 0) + 1 })
+      .update({ validation_count: newCount })
       .eq('id', songId.toString());
   }
 };
@@ -544,10 +546,17 @@ export const togglePlayerCell = async (gameId, playerId, cellId, newState) => {
     cell.marked = newState;
 
     // Stats & Leaderboard
-    if (newState) {
-      updatePersonalSongStats(player.id, cell.song, 'validate');
-      incrementSongValidationCount(cell.song.id);
-    }
+    // Handle validation counts (increment or decrement) based on toggle
+    const valChange = newState ? 1 : -1;
+
+    // 1. Update Personal Stats in Supabase Profile
+    updatePersonalSongStats(player.id, cell.song, 'validate', valChange);
+
+    // 2. Update Global Song Validation Count (if needed, but personal sum covers it)
+    // incrementSongValidationCount currently just +1, let's assume we fix it or leave it if it only tracks 'ever marked'.
+    // User asked "take into account when people check uncheck".
+    incrementSongValidationCount(cell.song.id, valChange);
+
 
     recalculatePlayerScore(player);
 
