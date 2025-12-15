@@ -324,6 +324,40 @@ const addToHistory = async (game, userId) => {
   if (error) console.error("Error saving history:", error);
 };
 
+const removeFromHistory = async (gameId, userId) => {
+  if (!userId || !gameId) return;
+
+  // 1. Guest
+  if (userId.startsWith('guest-')) {
+    if (typeof window === 'undefined') return;
+    try {
+      const stored = localStorage.getItem(GUEST_HISTORY_KEY);
+      if (stored) {
+        let localHistory = JSON.parse(stored);
+        localHistory = localHistory.filter(h => h.id !== gameId);
+        localStorage.setItem(GUEST_HISTORY_KEY, JSON.stringify(localHistory));
+      }
+    } catch (e) { }
+    return;
+  }
+
+  // 2. Real User
+  const profile = await getUserProfile(userId);
+  let history = profile.history || [];
+
+  const initialLength = history.length;
+  history = history.filter(h => h.id !== gameId);
+
+  if (history.length !== initialLength) {
+    const { error } = await supabase.from('profiles').upsert({
+      id: userId,
+      history: history,
+      updated_at: new Date()
+    });
+    if (error) console.error("Error removing history:", error);
+  }
+};
+
 export const getGameHistory = async (userId) => {
   if (userId && userId.startsWith('guest-')) {
     if (typeof window === 'undefined') return [];
@@ -377,6 +411,7 @@ export const createGame = async (host, settings = {}) => {
       avatar: host.avatar,
       score: 0,
       isReady: false,
+      isGridLocked: false,
       grid: Array(16).fill(null).map((_, i) => ({ id: `cell-${i}`, song: null, marked: false })),
       bingoCount: 0
     }],
@@ -394,6 +429,13 @@ export const createGame = async (host, settings = {}) => {
   saveCurrentGameId(gameId);
   await addToHistory(newGameData, host.id);
   await updateUserStats(host.id, { games_played: 1 });
+
+  // --- AUTO-CLEANUP TRIGGER (OPPORTUNISTIC) ---
+  // Every time a game is created, there is a 10% chance we trigger the cleanup routine.
+  // We do NOT await this, we let it run in the background (fire and forget).
+  if (Math.random() < 0.1) {
+    fetch('/api/cleanup').catch(e => console.warn("Background cleanup trigger failed:", e));
+  }
 
   return newGameData;
 };
@@ -428,6 +470,7 @@ export const joinGame = async (gameId, user) => {
         name: user.name,
         avatar: user.avatar,
         score: 0,
+        isGridLocked: false,
         grid: Array(16).fill(null).map((_, i) => ({ id: `cell-${i}`, song: null, marked: false })),
         bingoCount: 0
       });
@@ -484,45 +527,35 @@ export const updatePlayerGrid = async (gameId, playerId, grid, newSong = null) =
   }
 };
 
-export const toggleGlobalSong = async (gameId, songId, newState) => {
+// Individual cell marking (No global sync)
+export const togglePlayerCell = async (gameId, playerId, cellId, newState) => {
   let game = await joinGame(gameId, null);
   if (!game) return;
 
-  let changesMade = false;
-  let validatedForFirstTimeInGame = false;
+  const player = game.players.find(p => p.id === playerId);
+  if (!player) return;
 
-  game.players.forEach(player => {
-    let playerChanged = false;
-    let bingoBefore = player.bingoCount || 0;
+  const cell = player.grid.find(c => c.id === cellId);
+  if (!cell || !cell.song) return; // Can only mark if there is a song
 
-    player.grid.forEach(cell => {
-      if (cell.song && cell.song.id === songId) {
-        if (cell.marked !== newState) {
-          cell.marked = newState;
-          playerChanged = true;
-          changesMade = true;
+  let bingoBefore = player.bingoCount || 0;
 
-          if (newState) {
-            updatePersonalSongStats(player.id, cell.song, 'validate');
-            validatedForFirstTimeInGame = true;
-          }
-        }
-      }
-    });
+  if (cell.marked !== newState) {
+    cell.marked = newState;
 
-    if (playerChanged) {
-      recalculatePlayerScore(player);
-      if ((player.bingoCount || 0) > bingoBefore) {
-        updateUserStats(player.id, { bingos: 1 });
-      }
+    // Stats & Leaderboard
+    if (newState) {
+      updatePersonalSongStats(player.id, cell.song, 'validate');
+      incrementSongValidationCount(cell.song.id);
     }
-  });
 
-  if (changesMade) {
+    recalculatePlayerScore(player);
+
+    if ((player.bingoCount || 0) > bingoBefore) {
+      updateUserStats(player.id, { bingos: 1 });
+    }
+
     await saveGameState(gameId, game);
-    if (validatedForFirstTimeInGame && newState) {
-      incrementSongValidationCount(songId);
-    }
   }
 };
 
@@ -592,3 +625,49 @@ const calculateBingo = (grid) => {
   }
   return lines;
 };
+
+// Toggle individual player's grid lock status
+export const togglePlayerGridLock = async (gameId, playerId) => {
+  const { data, error } = await supabase
+    .from('gamestates')
+    .select('data')
+    .eq('id', gameId)
+    .maybeSingle();
+
+  if (error || !data) return;
+
+  let game = data.data;
+
+  const playerIndex = game.players.findIndex(p => p.id === playerId);
+  if (playerIndex !== -1) {
+    game.players[playerIndex].isGridLocked = !game.players[playerIndex].isGridLocked;
+    await supabase.from('gamestates').update({ data: game }).eq('id', gameId);
+  }
+};
+
+export const toggleSaveGame = async (gameId, shouldSave) => {
+  let game = await joinGame(gameId, null);
+  if (!game) return;
+
+  game.isSaved = shouldSave;
+  await saveGameState(gameId, game);
+};
+
+export const removePlayer = async (gameId, playerId) => {
+  let game = await joinGame(gameId, null);
+  if (!game) return;
+
+  const initialPlayerCount = game.players.length;
+  game.players = game.players.filter(p => p.id !== playerId);
+
+  if (game.players.length !== initialPlayerCount) {
+    // If the host leaves, assign new host if players remain
+    if (game.hostId === playerId && game.players.length > 0) {
+      game.hostId = game.players[0].id;
+    }
+
+    await saveGameState(gameId, game);
+    await removeFromHistory(gameId, playerId);
+  }
+};
+

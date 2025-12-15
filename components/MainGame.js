@@ -79,7 +79,12 @@ const MainGame = () => {
           // Automatic login from local storage -> isManual = false
           handleLoginSuccess(localUser, false);
         } else {
-          // No user at all -> Stay on Lobby (Default)
+          // No user at all.
+          // IF there is a game code in the URL, we must force them to login/guest screen first.
+          if (code) {
+            setPendingAction({ type: 'join', code: code });
+            setView(VIEW.LOGIN);
+          }
           setAuthLoading(false);
         }
       }

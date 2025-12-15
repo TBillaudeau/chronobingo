@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { updatePlayerGrid, updateGame, subscribeToGame, toggleFavorite, getFavorites, joinGame, removeCurrentGameId, toggleGlobalSong, finishGame, updateUserStats } from '../services/gameService';
+import { updatePlayerGrid, updateGame, subscribeToGame, toggleFavorite, getFavorites, joinGame, removeCurrentGameId, togglePlayerCell, finishGame, updateUserStats, togglePlayerGridLock, removePlayer, toggleSaveGame } from '../services/gameService';
 import { searchSongs, getTrendingSongs } from '../services/music';
 import { t } from '../services/translations';
 import { hapticClick, hapticFeedback, hapticSuccess, hapticError } from '../services/haptics';
@@ -96,7 +96,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
 
     // DESKTOP DRAG & DROP HANDLERS
     const handleDragStart = (e, index) => {
-        if (game.status !== 'lobby') {
+        if (game.status !== 'lobby' || (myPlayer && myPlayer.isGridLocked)) {
             e.preventDefault();
             return;
         }
@@ -140,8 +140,15 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
     const handleCellClick = (cell, index) => {
         hapticClick();
 
-        // 1. MOVE MODE (Lobby Only - Mobile preferred)
-        if (game.status === 'lobby' && isMoveMode) {
+        // Prevent editing if grid is locked (except for marking songs)
+        if (isMyGridLocked && !cell.song) {
+            hapticError();
+            alert(t(lang, 'game.gridLockedNoEdit'));
+            return;
+        }
+
+        // 1. MOVE MODE (Only when unlocked)
+        if (!isMyGridLocked && isMoveMode) {
             if (moveSourceIndex === null) {
                 // Select Source
                 setMoveSourceIndex(index);
@@ -159,28 +166,26 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
             return;
         }
 
-        // 2. ADD SONG MODE (Lobby Only OR Empty cell during Play for Late Joiners)
-        if ((game.status === 'lobby' && !isMoveMode) || (game.status === 'playing' && !cell.song)) {
+        // 2. ADD SONG MODE (Only when unlocked)
+        if (!isMyGridLocked && !isMoveMode) {
             setSelectedCellId(cell.id);
             setSearchTerm('');
             setModalTab('search');
             return;
         }
 
-        // 3. PLAYING MODE (Toggle Mark)
-        if (game.status === 'playing') {
-            if (!myPlayer || !cell.song) return;
+        // 3. PLAYING MODE (Toggle Mark - Only when locked)
+        if (isMyGridLocked && cell.song) {
+            if (!myPlayer) return;
 
             // Optimistic Update for Marking
             const newMarkedState = !cell.marked;
 
             // We update local state immediately so it feels snappy
             const updatedPlayers = game.players.map(p => {
-                if (p.grid.some(c => c.song?.id === cell.song.id)) {
-                    // Update this song everywhere for everyone (since it's global toggle logic)
-                    // Note: This is a partial optimistic guess, real sync happens via DB
+                if (p.id === currentUser.id) {
                     const newGrid = p.grid.map(c =>
-                        c.song?.id === cell.song.id ? { ...c, marked: newMarkedState } : c
+                        c.id === cell.id ? { ...c, marked: newMarkedState } : c
                     );
                     return { ...p, grid: newGrid };
                 }
@@ -188,7 +193,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
             });
             setGame({ ...game, players: updatedPlayers });
 
-            toggleGlobalSong(game.id, cell.song.id, newMarkedState);
+            togglePlayerCell(game.id, currentUser.id, cell.id, newMarkedState);
         }
     };
 
@@ -251,10 +256,12 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
         await toggleFavorite(currentUser.id, song);
     }
 
-    const startGame = () => {
-        hapticSuccess();
-        updateGame(game.id, { status: 'playing' });
-    }
+    const toggleMyGridLock = async () => {
+        hapticClick();
+        setIsMoveMode(false);
+        setMoveSourceIndex(null);
+        await togglePlayerGridLock(game.id, currentUser.id);
+    };
 
     const handleFinishGame = async () => {
         if (confirm("Terminer la partie ?")) {
@@ -282,6 +289,9 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
 
     const displayedSongs = modalTab === 'search' ? searchResults : favoriteSongs;
     const opponents = game.players.filter(p => p.id !== currentUser.id);
+
+    // Check if my grid is locked
+    const isMyGridLocked = myPlayer.isGridLocked || false;
 
     // GAME OVER SCREEN
     if (game.status === 'finished' && !showGridOnGameOver) {
@@ -331,15 +341,27 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
 
             {/* Header - Cleaned up style (No glass-liquid borders) */}
             <header className="px-4 py-3 flex justify-between items-center sticky top-0 z-30 mb-4 backdrop-blur-md bg-slate-900/30 border-b border-white/5">
-                <div className="flex-1 flex justify-start">
-                    <button onClick={() => { hapticClick(); removeCurrentGameId(); onLeave(); }} className="text-slate-400 hover:text-white p-2 elastic-active">
+                <div className="flex-1 flex justify-start gap-2">
+                    <button onClick={() => { hapticClick(); onLeave(); }} className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-white bg-white/5 rounded-full elastic-active">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
+                    </button>
+                    <button onClick={async () => {
+                        if (confirm("Voulez-vous vraiment quitter la partie ?")) {
+                            hapticClick();
+                            await removePlayer(game.id, currentUser.id);
+                            removeCurrentGameId();
+                            onLeave();
+                        }
+                    }}
+                        className="w-10 h-10 flex items-center justify-center text-red-500 hover:text-red-400 bg-red-500/10 rounded-full elastic-active"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
 
                 <div className="flex flex-col items-center">
-                    <div className={`text-[10px] font-black px-3 py-1 rounded-full mb-1 uppercase tracking-widest ${game.status === 'playing' ? 'bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-yellow-500 text-white shadow-[0_0_10px_rgba(234,179,8,0.5)]'}`}>
-                        {game.status === 'playing' ? t(lang, 'game.statusPlaying') : t(lang, 'game.statusLobby')}
+                    <div className={`text-[10px] font-black px-3 py-1 rounded-full mb-1 uppercase tracking-widest ${isMyGridLocked ? 'bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-yellow-500 text-white shadow-[0_0_10px_rgba(234,179,8,0.5)]'}`}>
+                        {isMyGridLocked ? t(lang, 'game.statusPlaying') : t(lang, 'game.statusLobby')}
                     </div>
                     <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-1 border border-white/10">
                         <h1 className="font-black text-lg tracking-widest cursor-pointer elastic-active" onClick={copyCode}>
@@ -360,7 +382,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
 
                 {/* HOST FINISH BUTTON */}
                 <div className="flex-1 flex justify-end items-center gap-3">
-                    {isHost && game.status === 'playing' && (
+                    {isHost && game.players.some(p => p.isGridLocked) && (
                         <button onClick={handleFinishGame} className="w-10 h-10 bg-red-500/20 border border-red-500 text-red-500 rounded-full flex items-center justify-center elastic-active shadow-[0_0_10px_rgba(239,68,68,0.4)]">
                             🛑
                         </button>
@@ -372,21 +394,23 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
             </header>
 
             {/* Tabs */}
-            <div className="flex px-4 mb-4 gap-3">
+            < div className="flex px-4 mb-4 gap-3" >
                 <button onClick={() => switchTab('grid')} className={`flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all elastic-active ${tab === 'grid' ? 'bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white shadow-lg ring-2 ring-fuchsia-400/50' : 'bg-slate-800 text-slate-400'}`}>{t(lang, 'game.tabGrid')}</button>
                 <button onClick={() => switchTab('players')} className={`flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all elastic-active ${tab === 'players' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg ring-2 ring-cyan-400/50' : 'bg-slate-800 text-slate-400'}`}>{t(lang, 'game.tabPlayers')} <span className="bg-black/30 px-1.5 py-0.5 rounded-md ml-1">{game.players.length}</span></button>
-            </div>
+            </div >
 
-            {/* PREPARATION MODE SWITCH (LOBBY) */}
-            {tab === 'grid' && game.status === 'lobby' && (
-                <div className="px-4 mb-4">
-                    <div className="glass-liquid p-1 rounded-xl flex">
-                        <button onClick={() => { setIsMoveMode(false); setMoveSourceIndex(null); hapticClick(); }} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${!isMoveMode ? 'bg-white text-slate-900' : 'text-slate-400'}`}>🎵 {t(lang, 'game.btnAdd')}</button>
-                        <button onClick={() => { setIsMoveMode(true); hapticClick(); }} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${isMoveMode ? 'bg-cyan-400 text-slate-900' : 'text-slate-400'}`}>🔄 Reorder</button>
+            {/* PREPARATION MODE SWITCH (Only if grid not locked) */}
+            {
+                tab === 'grid' && !isMyGridLocked && (
+                    <div className="px-4 mb-4">
+                        <div className="glass-liquid p-1 rounded-xl flex">
+                            <button onClick={() => { setIsMoveMode(false); setMoveSourceIndex(null); hapticClick(); }} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${!isMoveMode ? 'bg-white text-slate-900' : 'text-slate-400'}`}>🎵 {t(lang, 'game.btnAdd')}</button>
+                            <button onClick={() => { setIsMoveMode(true); hapticClick(); }} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${isMoveMode ? 'bg-cyan-400 text-slate-900' : 'text-slate-400'}`}>🔄 {t(lang, 'game.btnReorder')}</button>
+                        </div>
+                        {isMoveMode && <p className="text-center text-[10px] text-cyan-300 mt-2 animate-pulse font-bold">Tap a song, then tap another to swap!</p>}
                     </div>
-                    {isMoveMode && <p className="text-center text-[10px] text-cyan-300 mt-2 animate-pulse font-bold">Tap a song, then tap another to swap!</p>}
-                </div>
-            )}
+                )
+            }
 
             <div className="flex-1 px-4">
                 {tab === 'grid' && (
@@ -404,7 +428,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                     className={`
                             relative rounded-xl overflow-hidden flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300 aspect-square
                             ${(isMoveMode || game.status === 'lobby') ? 'touch-manipulation' : ''}
-                            ${(isMoveMode) ? 'animate-wiggle' : ''}
+                            ${(isMoveMode && !isMyGridLocked) ? 'animate-wiggle' : ''}
                             ${(isMoveMode && moveSourceIndex === index) ? 'ring-4 ring-cyan-400 scale-105 z-10' : ''}
                             ${cell.marked
                                             ? 'shadow-[0_0_20px_rgba(217,70,239,0.6)] scale-[1.02] animate-splash'
@@ -442,29 +466,35 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                             )}
                                         </>
                                     ) : (
-                                        <div className="flex flex-col items-center gap-1 opacity-50 hover:opacity-100 transition-opacity cursor-copy">
-                                            <div className="w-8 h-8 rounded-full bg-cyan-500/20 border-2 border-cyan-500 flex items-center justify-center text-cyan-400">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+                                        !isMyGridLocked && (
+                                            <div className="flex flex-col items-center gap-1 opacity-50 hover:opacity-100 transition-opacity cursor-copy">
+                                                <div className="w-8 h-8 rounded-full bg-cyan-500/20 border-2 border-cyan-500 flex items-center justify-center text-cyan-400">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+                                                </div>
+                                                <span className="text-[8px] font-black uppercase text-cyan-400">{t(lang, 'game.btnAdd')}</span>
                                             </div>
-                                            <span className="text-[8px] font-black uppercase text-cyan-400">{t(lang, 'game.btnAdd')}</span>
-                                        </div>
+                                        )
                                     )}
                                 </div>
                             ))}
                         </div>
 
-                        {game.status === 'lobby' ? (
+                        {/* Individual Grid Lock Button - Only show if not locked */}
+                        {!isMyGridLocked && (
                             <div className="text-center space-y-4 animate-pop delay-100">
-                                {isHost ? (
-                                    <button onClick={startGame} className="w-full py-4 bg-white text-emerald-600 rounded-2xl font-black text-xl shadow-[0_0_30px_rgba(16,185,129,0.4)] animate-pulse elastic-active">{t(lang, 'game.btnStart')}</button>
-                                ) : (
-                                    <div className="flex items-center justify-center gap-2 text-cyan-400 animate-pulse">
-                                        <div className="w-2 h-2 bg-cyan-400 rounded-full"></div>
-                                        <p className="font-bold uppercase tracking-widest text-xs">{t(lang, 'game.waitingDj')}</p>
-                                    </div>
-                                )}
+                                <button
+                                    onClick={toggleMyGridLock}
+                                    className="w-full py-4 rounded-2xl font-black text-xl shadow-lg elastic-active transition-all bg-white text-emerald-600 shadow-[0_0_30px_rgba(16,185,129,0.4)]"
+                                >
+                                    {t(lang, 'game.btnLock')}
+                                </button>
+                                <p className="text-xs text-slate-400 font-bold">
+                                    {t(lang, 'game.lockHint')}
+                                </p>
                             </div>
-                        ) : (
+                        )}
+
+                        {isMyGridLocked && (
                             <div className="text-center p-4 glass-liquid rounded-3xl border border-fuchsia-500/20 mb-8 animate-pop">
                                 <p className="text-xs font-black text-fuchsia-400 uppercase tracking-widest mb-1">{t(lang, 'game.score')}</p>
                                 <p className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400">{myPlayer.score}</p>
@@ -543,108 +573,135 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                 <div className="text-right">
                                     <p className="font-black text-2xl text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400">{p.score}</p>
                                 </div>
+                                {isHost && p.id !== currentUser.id && (
+                                    <button
+                                        onClick={async (e) => {
+                                            e.stopPropagation();
+                                            if (confirm("Exclure ce joueur ?")) {
+                                                hapticClick();
+                                                await removePlayer(game.id, p.id);
+                                            }
+                                        }}
+                                        className="ml-3 w-8 h-8 flex items-center justify-center bg-red-500/20 text-red-500 rounded-full hover:bg-red-500 hover:text-white transition-colors"
+                                    >
+                                        ✕
+                                    </button>
+                                )}
                             </div>
                         ))}
+
+                        {isHost && !currentUser.isGuest && (
+                            <div className="mt-6 pt-4 border-t border-white/5 flex justify-center">
+                                <button
+                                    onClick={async () => { hapticClick(); await toggleSaveGame(game.id, !game.isSaved); }}
+                                    className={`px-4 py-3 rounded-xl font-bold uppercase tracking-widest text-xs border transition-all flex items-center gap-2 ${game.isSaved ? 'bg-green-500/20 text-green-400 border-green-500' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-white'}`}
+                                >
+                                    {game.isSaved ? '✅ Partie Sauvegardée' : '💾 Sauvegarder la partie'}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
 
             {/* SEARCH MODAL */}
-            {selectedCellId && (
-                <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center sm:p-4 animate-in fade-in duration-200">
-                    {/* Backdrop */}
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => { setSelectedCellId(null); if (audioRef.current) audioRef.current.pause(); setPlayingUrl(null); }}></div>
+            {
+                selectedCellId && (
+                    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center sm:p-4 animate-in fade-in duration-200">
+                        {/* Backdrop */}
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => { setSelectedCellId(null); if (audioRef.current) audioRef.current.pause(); setPlayingUrl(null); }}></div>
 
-                    {/* Modal Content */}
-                    <div className="relative w-full max-w-lg h-[99vh] md:h-[80vh] bg-slate-900/60 backdrop-blur-2xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-t-3xl md:rounded-3xl flex flex-col overflow-hidden animate-slide-up">
+                        {/* Modal Content */}
+                        <div className="relative w-full max-w-lg h-[99vh] md:h-[80vh] bg-slate-900/60 backdrop-blur-2xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-t-3xl md:rounded-3xl flex flex-col overflow-hidden animate-slide-up">
 
-                        {/* Modal Header */}
-                        <div className="p-4 border-b border-white/5 flex items-center gap-3 bg-white/5">
-                            <div className="flex-1 flex bg-black/20 p-1 rounded-xl border border-white/5">
-                                <button onClick={() => setModalTab('search')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${modalTab === 'search' ? 'bg-cyan-500/80 text-white shadow-lg backdrop-blur-md' : 'text-slate-400 hover:text-white'}`}>
-                                    🔍 {t(lang, 'game.modalTabSearch')}
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        if (currentUser.isGuest) { hapticError(); alert(t(lang, 'game.guestFavWarning')); return; }
-                                        setModalTab('favorites');
-                                    }}
-                                    className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${currentUser.isGuest ? 'opacity-50 cursor-not-allowed' : ''} ${modalTab === 'favorites' ? 'bg-fuchsia-500/80 text-white shadow-lg backdrop-blur-md' : 'text-slate-400 hover:text-white'}`}
-                                >
-                                    {currentUser.isGuest ? '🔒' : '❤️'} {t(lang, 'game.modalTabFavs')}
-                                </button>
-                            </div>
-                            <button
-                                onClick={() => { setSelectedCellId(null); if (audioRef.current) audioRef.current.pause(); setPlayingUrl(null); }}
-                                className="w-10 h-10 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center text-slate-400 hover:text-white transition-colors border border-white/5"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                        </div>
-
-                        {modalTab === 'search' && (
-                            <div className="p-4 pb-0">
-                                <div className="relative">
-                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                        <svg className="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                    </div>
-                                    <input
-                                        autoFocus
-                                        type="text"
-                                        placeholder={t(lang, 'game.searchTitle')}
-                                        className="w-full bg-black/20 text-white pl-11 pr-4 py-4 rounded-2xl border border-white/10 focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 outline-none transition-all text-lg placeholder-slate-500 font-medium backdrop-blur-sm"
-                                        value={searchTerm}
-                                        onChange={e => setSearchTerm(e.target.value)}
-                                    />
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-safe scrollbar-hide">
-                            {displayedSongs.map((song, i) => (
-                                <div key={song.id} onClick={() => handleSongSelect(song)} className="group flex items-center gap-4 p-3 rounded-2xl hover:bg-white/5 cursor-pointer transition-all border border-transparent hover:border-white/10 animate-pop" style={{ animationDelay: `${i * 0.05}s` }}>
-
-                                    <div className="relative w-16 h-16 shrink-0">
-                                        <img src={song.cover} className="w-full h-full rounded-xl shadow-lg object-cover group-hover:scale-105 transition-transform duration-300" alt="cover" />
-
-                                        {song.preview && (
-                                            <div className="absolute -bottom-2 -right-2 z-20">
-                                                <button
-                                                    onClick={(e) => toggleAudio(e, song.preview)}
-                                                    className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg backdrop-blur-md border transition-all ${playingUrl === song.preview ? 'bg-cyan-500 border-cyan-400 text-white animate-pulse' : 'bg-black/60 border-white/20 text-white hover:bg-cyan-500 hover:border-cyan-400'}`}
-                                                >
-                                                    {playingUrl === song.preview ? (
-                                                        <div className="w-2 h-2 bg-white rounded-[1px]"></div>
-                                                    ) : (
-                                                        <svg className="w-3 h-3 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-                                                    )}
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-bold text-white truncate text-lg group-hover:text-cyan-300 transition-colors">{song.title}</p>
-                                        <p className="text-xs text-slate-400 truncate uppercase tracking-wide font-bold mt-0.5">{song.artist}</p>
-                                    </div>
-
+                            {/* Modal Header */}
+                            <div className="p-4 border-b border-white/5 flex items-center gap-3 bg-white/5">
+                                <div className="flex-1 flex bg-black/20 p-1 rounded-xl border border-white/5">
+                                    <button onClick={() => setModalTab('search')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${modalTab === 'search' ? 'bg-cyan-500/80 text-white shadow-lg backdrop-blur-md' : 'text-slate-400 hover:text-white'}`}>
+                                        🔍 {t(lang, 'game.modalTabSearch')}
+                                    </button>
                                     <button
-                                        onClick={(e) => handleFavToggle(e, song)}
-                                        className={`p-3 rounded-full hover:bg-white/10 active:scale-90 transition-transform group/heart ${currentUser.isGuest ? 'opacity-30 grayscale cursor-not-allowed' : ''}`}
+                                        onClick={() => {
+                                            if (currentUser.isGuest) { hapticError(); alert(t(lang, 'game.guestFavWarning')); return; }
+                                            setModalTab('favorites');
+                                        }}
+                                        className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${currentUser.isGuest ? 'opacity-50 cursor-not-allowed' : ''} ${modalTab === 'favorites' ? 'bg-fuchsia-500/80 text-white shadow-lg backdrop-blur-md' : 'text-slate-400 hover:text-white'}`}
                                     >
-                                        {favoriteSongs.find(f => f.id === song.id) ? (
-                                            <svg className="w-6 h-6 text-fuchsia-500 filter drop-shadow-[0_0_8px_rgba(217,70,239,0.5)]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" /></svg>
-                                        ) : (
-                                            <svg className="w-6 h-6 text-slate-600 group-hover/heart:text-fuchsia-400 transition-colors" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
-                                        )}
+                                        {currentUser.isGuest ? '🔒' : '❤️'} {t(lang, 'game.modalTabFavs')}
                                     </button>
                                 </div>
-                            ))}
+                                <button
+                                    onClick={() => { setSelectedCellId(null); if (audioRef.current) audioRef.current.pause(); setPlayingUrl(null); }}
+                                    className="w-10 h-10 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center text-slate-400 hover:text-white transition-colors border border-white/5"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            </div>
+
+                            {modalTab === 'search' && (
+                                <div className="p-4 pb-0">
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                            <svg className="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                        </div>
+                                        <input
+                                            autoFocus
+                                            type="text"
+                                            placeholder={t(lang, 'game.searchTitle')}
+                                            className="w-full bg-black/20 text-white pl-11 pr-4 py-4 rounded-2xl border border-white/10 focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 outline-none transition-all text-lg placeholder-slate-500 font-medium backdrop-blur-sm"
+                                            value={searchTerm}
+                                            onChange={e => setSearchTerm(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-safe scrollbar-hide">
+                                {displayedSongs.map((song, i) => (
+                                    <div key={song.id} onClick={() => handleSongSelect(song)} className="group flex items-center gap-4 p-3 rounded-2xl hover:bg-white/5 cursor-pointer transition-all border border-transparent hover:border-white/10 animate-pop" style={{ animationDelay: `${i * 0.05}s` }}>
+
+                                        <div className="relative w-16 h-16 shrink-0">
+                                            <img src={song.cover} className="w-full h-full rounded-xl shadow-lg object-cover group-hover:scale-105 transition-transform duration-300" alt="cover" />
+
+                                            {song.preview && (
+                                                <div className="absolute -bottom-2 -right-2 z-20">
+                                                    <button
+                                                        onClick={(e) => toggleAudio(e, song.preview)}
+                                                        className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg backdrop-blur-md border transition-all ${playingUrl === song.preview ? 'bg-cyan-500 border-cyan-400 text-white animate-pulse' : 'bg-black/60 border-white/20 text-white hover:bg-cyan-500 hover:border-cyan-400'}`}
+                                                    >
+                                                        {playingUrl === song.preview ? (
+                                                            <div className="w-2 h-2 bg-white rounded-[1px]"></div>
+                                                        ) : (
+                                                            <svg className="w-3 h-3 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-bold text-white truncate text-lg group-hover:text-cyan-300 transition-colors">{song.title}</p>
+                                            <p className="text-xs text-slate-400 truncate uppercase tracking-wide font-bold mt-0.5">{song.artist}</p>
+                                        </div>
+
+                                        <button
+                                            onClick={(e) => handleFavToggle(e, song)}
+                                            className={`p-3 rounded-full hover:bg-white/10 active:scale-90 transition-transform group/heart ${currentUser.isGuest ? 'opacity-30 grayscale cursor-not-allowed' : ''}`}
+                                        >
+                                            {favoriteSongs.find(f => f.id === song.id) ? (
+                                                <svg className="w-6 h-6 text-fuchsia-500 filter drop-shadow-[0_0_8px_rgba(217,70,239,0.5)]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" /></svg>
+                                            ) : (
+                                                <svg className="w-6 h-6 text-slate-600 group-hover/heart:text-fuchsia-400 transition-colors" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                                            )}
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 

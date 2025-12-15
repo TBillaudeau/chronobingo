@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { getUserProfile, toggleFavorite, logoutUser, getGameHistory, deleteUserAccount } from '../services/gameService';
+import { getUserProfile, toggleFavorite, logoutUser, getGameHistory, deleteUserAccount, removePlayer } from '../services/gameService';
 import { searchSongs } from '../services/music';
 import { t } from '../services/translations';
 
@@ -229,13 +229,26 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
                                         <p className="font-black text-white text-xl tracking-wider">{game.id}</p>
                                         <p className="text-xs text-slate-400 font-bold uppercase mt-1">Host: {game.hostName} • {formatDate(game.date)}</p>
                                     </div>
-                                    <div className="text-right">
-                                        <span className="block text-fuchsia-400 font-black text-lg mb-1">{game.myScore} PTS</span>
+                                    <div className="text-right flex items-center gap-3">
+                                        <span className="block text-fuchsia-400 font-black text-lg">{game.myScore} PTS</span>
                                         <button
                                             onClick={() => onRejoinGame(game.id)}
-                                            className="px-5 py-2 bg-white text-slate-900 rounded-xl text-xs font-black hover:bg-cyan-400 hover:text-white transition-colors shadow-lg elastic-active"
+                                            className="px-4 py-2 bg-white text-slate-900 rounded-xl text-xs font-black hover:bg-cyan-400 hover:text-white transition-colors shadow-lg elastic-active"
                                         >
                                             REJOIN
+                                        </button>
+                                        <button
+                                            onClick={async (e) => {
+                                                e.stopPropagation();
+                                                if (confirm(t(lang, 'profile.deleteGameConfirm') || "Supprimer cette partie ?")) {
+                                                    await removePlayer(game.id, user.id);
+                                                    // Optimistic Update
+                                                    setHistory(prev => prev.filter(h => h.id !== game.id));
+                                                }
+                                            }}
+                                            className="w-8 h-8 flex items-center justify-center bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-colors"
+                                        >
+                                            ✕
                                         </button>
                                     </div>
                                 </div>

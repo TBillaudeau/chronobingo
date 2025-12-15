@@ -75,7 +75,12 @@ export const dictionary = {
       guestFavWarning: "🔒 Connecte-toi avec Google pour gérer tes favoris !",
       errorLateJoin: "⛔ La partie a commencé et n'accepte plus de nouveaux joueurs.",
       viewGrid: "Voir ma grille",
-      viewPodium: "PODIUM"
+      viewPodium: "PODIUM",
+      btnLock: "Verrouiller la grille",
+      btnReorder: "Réorganiser",
+      btnUnlock: "Déverrouiller ma grille",
+      lockHint: "Verrouille ta grille pour commencer à jouer !",
+      gridLockedNoEdit: "⛔ Ta grille est verrouillée ! Tu ne peux plus ajouter de chansons."
     },
     profile: {
       title: "Mon Profil",
@@ -180,7 +185,12 @@ export const dictionary = {
       guestFavWarning: "🔒 Login with Google to manage favorites!",
       errorLateJoin: "⛔ The game has started and is closed to new players.",
       viewGrid: "View my grid",
-      viewPodium: "PODIUM"
+      viewPodium: "PODIUM",
+      btnLock: "Lock grid",
+      btnReorder: "Reorder",
+      btnUnlock: "Unlock my grid",
+      lockHint: "Lock your grid to start playing!",
+      gridLockedNoEdit: "⛔ Your grid is locked! You can't add more songs."
     },
     profile: {
       title: "My Profile",
