@@ -1,23 +1,28 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { getUserProfile, toggleFavorite, logoutUser, getGameHistory, deleteUserAccount, removePlayer, toggleSaveGame } from '../services/gameService';
+import { getUserProfile, toggleFavorite, logoutUser, getGameHistory, deleteUserAccount, removePlayer, toggleSaveGame, ACHIEVEMENTS } from '../services/gameService';
 import { requestNotificationPermission, hasNotificationPermission } from '../services/notifications';
 import { searchSongs } from '../services/music';
 import { t } from '../services/translations';
 import { hapticClick } from '../services/haptics';
+import { useAudioPlayer } from '../hooks/useAudioPlayer';
 
-const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame }) => {
+import Image from 'next/image';
+
+const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame, batterySaver, setBatterySaver }) => {
+
     const [activeTab, setActiveTab] = useState('history'); // Default to history for everyone
     const [favorites, setFavorites] = useState([]);
+    const [achievements, setAchievements] = useState([]);
     const [history, setHistory] = useState([]);
     const [stats, setStats] = useState(null);
     const [songStats, setSongStats] = useState({});
-    const [playingUrl, setPlayingUrl] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [searching, setSearching] = useState(false);
     const [notifEnabled, setNotifEnabled] = useState(false);
-    const audioRef = useRef(null);
+
+    const { playingUrl, toggleAudio } = useAudioPlayer();
 
     useEffect(() => {
         setNotifEnabled(hasNotificationPermission());
@@ -50,6 +55,7 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
             const profile = await getUserProfile(user.id);
             if (profile) {
                 setFavorites(profile.favorites || []);
+                setAchievements(profile.achievements || []);
                 setStats(profile.stats);
                 setSongStats(profile.song_stats || {});
             }
@@ -67,22 +73,6 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
         }
         setFavorites(newFavs);
         await toggleFavorite(user.id, song);
-    };
-
-    const toggleAudio = (url) => {
-        if (!url) return;
-        if (playingUrl === url) {
-            if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-            setPlayingUrl(null);
-        } else {
-            if (audioRef.current) audioRef.current.pause();
-            const audio = new Audio(url);
-            audio.volume = 0.5;
-            audio.onended = () => setPlayingUrl(null);
-            audio.play();
-            audioRef.current = audio;
-            setPlayingUrl(url);
-        }
     };
 
     const ratio = stats && stats.games_played > 0
@@ -135,7 +125,13 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
             <div className="glass-liquid p-6 rounded-3xl mb-8 border border-fuchsia-500/30">
                 <div className="flex items-center gap-6 mb-6">
                     <div className="relative">
-                        <img src={user.avatar} className="w-24 h-24 rounded-full border-4 border-fuchsia-500 shadow-[0_0_20px_rgba(217,70,239,0.4)] object-cover" alt="Profile" />
+                        <Image
+                            src={user.avatar}
+                            width={96}
+                            height={96}
+                            className="rounded-full border-4 border-fuchsia-500 shadow-[0_0_20px_rgba(217,70,239,0.4)] object-cover"
+                            alt="Profile"
+                        />
                         <div className="absolute bottom-0 right-0 text-2xl">{user.isGuest ? '👻' : '👑'}</div>
                     </div>
                     <div>
@@ -205,12 +201,20 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
                 </button>
 
                 {!user.isGuest && (
-                    <button
-                        onClick={() => setActiveTab('favorites')}
-                        className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-xl transition-all elastic-active ${activeTab === 'favorites' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                    >
-                        {t(lang, 'profile.tabFavs')}
-                    </button>
+                    <>
+                        <button
+                            onClick={() => setActiveTab('achievements')}
+                            className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-xl transition-all elastic-active ${activeTab === 'achievements' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                        >
+                            {t(lang, 'lobby.achievements')}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('favorites')}
+                            className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-xl transition-all elastic-active ${activeTab === 'favorites' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                        >
+                            {t(lang, 'profile.tabFavs')}
+                        </button>
+                    </>
                 )}
 
                 <button
@@ -237,23 +241,27 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
                                     className="glass-liquid p-5 rounded-3xl flex justify-between items-center hover:bg-white/5 transition-colors group cursor-pointer"
                                 >
                                     <div>
-                                        <p className="font-black text-white text-xl tracking-wider">{game.id}</p>
+                                        <div className="flex items-center gap-3">
+                                            <p className="font-black text-white text-xl tracking-wider">{game.id}</p>
+                                            <span className="text-fuchsia-400 font-black text-sm bg-fuchsia-500/10 px-2 py-0.5 rounded-lg border border-fuchsia-500/20">{game.myScore} PTS</span>
+                                        </div>
                                         <p className="text-xs text-slate-400 font-bold uppercase mt-1">Host: {game.hostName} • {formatDate(game.date)}</p>
                                     </div>
-                                    <div className="text-right flex items-center gap-3">
-                                        <span className="block text-fuchsia-400 font-black text-lg">{game.myScore} PTS</span>
+                                    <div className="text-right flex flex-col items-end gap-2">
                                         {!user.isGuest && (
                                             <button
                                                 onClick={async (e) => {
                                                     e.stopPropagation();
                                                     hapticClick();
-                                                    await toggleSaveGame(game.id, true);
-                                                    alert("Partie sauvegardée !");
+                                                    const newState = !game.isSaved; // Toggle
+                                                    await toggleSaveGame(game.id, newState, user.id);
+                                                    setHistory(prev => prev.map(h =>
+                                                        h.id === game.id ? { ...h, isSaved: newState } : h
+                                                    ));
                                                 }}
-                                                className="w-10 h-10 flex items-center justify-center bg-green-500/10 text-green-500 rounded-xl hover:bg-green-500 hover:text-white transition-all shadow-md active:scale-95"
-                                                title="Sauvegarder la partie"
+                                                className={`px-3 py-1.5 w-24 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all shadow-md active:scale-95 ${game.isSaved ? 'bg-green-500 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-white'}`}
                                             >
-                                                💾
+                                                {game.isSaved ? t(lang, 'profile.btnSaved') : t(lang, 'profile.btnSave')}
                                             </button>
                                         )}
                                         <button
@@ -265,13 +273,50 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
                                                     setHistory(prev => prev.filter(h => h.id !== game.id));
                                                 }
                                             }}
-                                            className="w-8 h-8 flex items-center justify-center bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-colors"
+                                            className="px-3 py-1.5 w-24 bg-red-500/10 text-red-500 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-red-500 hover:text-white transition-colors shadow-md"
                                         >
-                                            ✕
+                                            {t(lang, 'profile.btnDelete')}
                                         </button>
                                     </div>
                                 </div>
                             ))
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'achievements' && (
+                    <div className="space-y-4 animate-slide-up">
+                        {user.isGuest ? (
+                            <div className="p-8 text-center bg-black/20 rounded-3xl border border-white/5 mx-4">
+                                <p className="text-3xl mb-3">🔒</p>
+                                <p className="text-slate-400 font-medium">{t(lang, 'lobby.guestFavWarning')}</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-3 p-4">
+                                {ACHIEVEMENTS.map(ach => {
+                                    const unlocked = achievements.find(a => a.id === ach.id);
+                                    return (
+                                        <div key={ach.id} className={`flex items-center gap-4 p-4 rounded-2xl border ${unlocked ? 'bg-indigo-900/30 border-indigo-500/50 shadow-lg shadow-indigo-500/10' : 'bg-black/20 border-white/5 opacity-60'}`}>
+                                            <div className={`text-4xl ${unlocked ? 'scale-110 drop-shadow-md' : 'grayscale brightness-50'}`}>
+                                                {ach.icon}
+                                            </div>
+                                            <div>
+                                                <h3 className={`font-black text-lg ${unlocked ? 'text-white' : 'text-slate-500'}`}>
+                                                    {t(lang, `lobby.badge_${ach.id}`) || ach.id}
+                                                </h3>
+                                                <p className="text-xs text-slate-400 leading-snug">
+                                                    {t(lang, `lobby.badge_${ach.id}_desc`)}
+                                                </p>
+                                                {unlocked && (
+                                                    <p className="text-[10px] text-indigo-300 font-bold mt-1 uppercase tracking-wider">
+                                                        Débloqué
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         )}
                     </div>
                 )}
@@ -286,10 +331,21 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
                             <input
                                 type="text"
                                 placeholder={t(lang, 'game.searchTitle')}
-                                className="w-full bg-black/20 text-white pl-11 pr-4 py-4 rounded-2xl border border-white/10 focus:border-fuchsia-500/50 focus:ring-2 focus:ring-fuchsia-500/20 outline-none transition-all text-lg placeholder-slate-500 font-medium backdrop-blur-sm"
+                                className="w-full bg-black/20 text-white pl-11 pr-12 py-4 rounded-2xl border border-white/10 focus:border-fuchsia-500/50 focus:ring-2 focus:ring-fuchsia-500/20 outline-none transition-all text-lg placeholder-slate-500 font-medium backdrop-blur-sm"
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
                             />
+                            {searchTerm.length > 0 && (
+                                <button
+                                    onClick={() => {
+                                        hapticClick();
+                                        setSearchTerm('');
+                                    }}
+                                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-500 hover:text-white transition-colors"
+                                >
+                                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            )}
                         </div>
 
                         {(searchTerm.length > 2 ? searchResults : favorites).length === 0 ? (
@@ -304,7 +360,13 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
                                     <div key={song.id} className="group flex items-center gap-4 p-3 rounded-2xl hover:bg-white/5 cursor-default transition-all border border-transparent hover:border-white/10 animate-pop" style={{ animationDelay: `${i * 0.05}s` }}>
 
                                         <div className="relative w-16 h-16 shrink-0">
-                                            <img src={song.cover} className="w-full h-full rounded-xl shadow-lg object-cover group-hover:scale-105 transition-transform duration-300" alt="cover" />
+                                            <Image
+                                                src={song.cover}
+                                                width={64}
+                                                height={64}
+                                                className="rounded-xl shadow-lg object-cover group-hover:scale-105 transition-transform duration-300"
+                                                alt="cover"
+                                            />
 
                                             {song.preview && (
                                                 <div className="absolute -bottom-2 -right-2 z-20">
@@ -361,6 +423,20 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame 
                                         </button>
                                     ))}
                                 </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-black text-slate-400 mb-3 uppercase tracking-widest">Énergie</label>
+                                <button
+                                    onClick={() => {
+                                        hapticClick();
+                                        setBatterySaver(!batterySaver);
+                                    }}
+                                    className={`w-full py-4 rounded-2xl border-2 font-bold text-sm transition-all elastic-active flex items-center justify-center gap-2 ${batterySaver ? 'border-fuchsia-500 bg-black text-white shadow-[0_0_15px_rgba(217,70,239,0.3)]' : 'border-slate-700 text-slate-500 hover:border-slate-500'}`}
+                                >
+                                    <span>{batterySaver ? '🔋 ' + t(lang, 'lobby.batterySaver') : '🪫 ' + t(lang, 'lobby.batterySaver')}</span>
+                                </button>
+                                <p className="text-[10px] text-slate-600 text-center mt-2 px-2">{t(lang, 'lobby.batterySaverDesc')}</p>
                             </div>
 
                             <div>

@@ -23,8 +23,25 @@ const MainGame = () => {
   const [lang, setLang] = useState('fr');
   const [initialGameCode, setInitialGameCode] = useState('');
   const [authLoading, setAuthLoading] = useState(true);
+  const [batterySaver, setBatterySaver] = useState(false);
 
   const [pendingAction, setPendingAction] = useState(null);
+
+  // Battery Saver Auto-Detect (Android/Chrome only)
+  useEffect(() => {
+    if (typeof navigator.getBattery === 'function') {
+      navigator.getBattery().then(battery => {
+        const checkBattery = () => {
+          if (battery.level <= 0.3 && !battery.charging) {
+            setBatterySaver(true);
+          }
+        };
+        checkBattery();
+        battery.addEventListener('levelchange', checkBattery);
+        battery.addEventListener('chargingchange', checkBattery);
+      });
+    }
+  }, []);
 
   // Sync URL Logic
   const updateUrl = (newView, gameId = null) => {
@@ -230,8 +247,8 @@ const MainGame = () => {
   }
 
   return (
-    <div className="min-h-screen text-white relative overflow-hidden">
-      <StarryBackground />
+    <div className={`min-h-screen text-white relative overflow-hidden ${batterySaver ? 'bg-black' : ''}`}>
+      {!batterySaver && <StarryBackground />}
       <main className="relative z-10">
         {view === VIEW.LOGIN && (
           <Login lang={lang} onLogin={handleGuestLogin} initialCode={initialGameCode} />
@@ -267,6 +284,8 @@ const MainGame = () => {
             onLogout={handleLogout}
             onLanguageChange={setLang}
             onRejoinGame={handleRejoinFromProfile}
+            batterySaver={batterySaver}
+            setBatterySaver={setBatterySaver}
           />
         )}
       </main>

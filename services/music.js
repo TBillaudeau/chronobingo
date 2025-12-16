@@ -18,13 +18,15 @@ export const searchSongs = async (query) => {
     const data = await response.json();
     if (!data.data) return [];
 
-    return data.data.map((track) => ({
-      id: track.id,
-      title: track.title,
-      artist: track.artist.name,
-      cover: track.album.cover_medium,
-      preview: track.preview
-    }));
+    return data.data
+      .filter(track => track.preview && track.readable) // Filter unplayable
+      .map((track) => ({
+        id: track.id,
+        title: track.title,
+        artist: track.artist.name,
+        cover: track.album.cover_medium,
+        preview: track.preview
+      }));
   } catch (error) {
     console.warn("Deezer search failed, using fallback", error);
     return FALLBACK_SONGS.filter(s => s.title.toLowerCase().includes(query.toLowerCase()));
@@ -39,24 +41,22 @@ export const getTrendingSongs = async () => {
     const data = await response.json();
     if (!data.data) return FALLBACK_SONGS;
 
-    return data.data.map((track) => ({
-      id: track.id,
-      title: track.title,
-      artist: track.artist.name,
-      cover: track.album.cover_medium,
-      preview: track.preview
-    }));
+    return data.data
+      .filter(track => track.preview && track.readable)
+      .map((track) => ({
+        id: track.id,
+        title: track.title,
+        artist: track.artist.name,
+        cover: track.album.cover_medium,
+        preview: track.preview
+      }));
   } catch (error) {
     console.warn("Trending fetch failed", error);
     return FALLBACK_SONGS;
   }
 };
 
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+import { supabase } from '../lib/supabase';
 
 export const getTopPartySongs = async () => {
   try {

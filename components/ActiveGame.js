@@ -1,13 +1,200 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
+import { toBlob } from 'html-to-image';
+
 import { updatePlayerGrid, updateGame, subscribeToGame, toggleFavorite, getFavorites, joinGame, removeCurrentGameId, togglePlayerCell, finishGame, updateUserStats, togglePlayerGridLock, removePlayer, toggleSaveGame } from '../services/gameService';
 import { searchSongs, getTrendingSongs } from '../services/music';
 import { t } from '../services/translations';
 import { hapticClick, hapticFeedback, hapticSuccess, hapticError } from '../services/haptics';
 import { sendNotification } from '../services/notifications';
+import { useAudioPlayer } from '../hooks/useAudioPlayer';
+import { trainDatabase, findMatchV2 } from '../services/autoDaubService';
 
 const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onNavigateToProfile }) => {
     const [game, setGame] = useState(initialGame);
+    const [isAutoListening, setIsAutoListening] = useState(false);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [detectedMatch, setDetectedMatch] = useState(null); // Moved up for safe access
+    const autoDaubIntervalRef = useRef(null);
+    const mediaStreamRef = useRef(null);
+    const dbReadyRef = useRef(false);
+    const matchHistoryRef = useRef({ id: null, count: 0 });
+
+    // Fix stale closure in async callbacks
+    const gameRef = useRef(game);
+    useEffect(() => { gameRef.current = game; }, [game]);
+
+    // Debug Popup State
+    useEffect(() => {
+        if (detectedMatch) console.log("📢 POPUP STATE UPDATED:", detectedMatch.cell.song.title);
+    }, [detectedMatch]);
+
+    // ... (skipping unchanged code) ...
+
+    // AUTO-DAUB LOGIC
+    const toggleAutoDaub = async () => {
+        if (isAutoListening) {
+            if (mediaStreamRef.current) {
+                mediaStreamRef.current.getTracks().forEach(track => track.stop());
+                if (mediaStreamRef.current.audioContext) {
+                    try { mediaStreamRef.current.audioContext.close(); } catch (e) { }
+                }
+                mediaStreamRef.current = null;
+            }
+            setIsAutoListening(false);
+            hapticFeedback();
+            return;
+        }
+
+        try {
+            hapticClick();
+
+            // 1. Train Database (V2)
+            if (!dbReadyRef.current) {
+                setIsAnalyzing(true);
+                const songsToAnalyze = myPlayer.grid.map(c => c.song).filter(s => s);
+                await trainDatabase(songsToAnalyze); // Index full sequences
+                dbReadyRef.current = true;
+                setIsAnalyzing(false);
+            }
+
+            // 2. Request Mic (Disable processing for music clarity)
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false
+                }
+            });
+            mediaStreamRef.current = stream;
+
+            // FORCE 44.1kHz to align with Meyda/Database assumptions
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+            await audioContext.resume();
+
+            const source = audioContext.createMediaStreamSource(stream);
+
+            // PRE-AMP: 4x Boost
+            const preAmp = audioContext.createGain();
+            preAmp.gain.value = 4.0;
+            source.connect(preAmp);
+
+            // Use AudioWorklet
+            const workletCode = `
+                class CaptureProcessor extends AudioWorkletProcessor {
+                    constructor() {
+                        super();
+                        this.samplesCollected = 0;
+                        this.bufferSize = sampleRate * 6; // Increase to 6s for better matching context 
+                        this.buffer = new Float32Array(this.bufferSize);
+                        this.lastLog = currentTime;
+                    }
+                    process(inputs) {
+                        const input = inputs[0];
+                        if (!input || !input.length) return true;
+                        
+                        // Debug Logs
+                        if (currentTime - this.lastLog > 3.0) {
+                             this.port.postMessage({ type: 'log', message: 'V2 Worklet Alive' });
+                             this.lastLog = currentTime;
+                        }
+
+                        const channelData = input[0];
+                        
+                        if (this.samplesCollected + channelData.length > this.bufferSize) {
+                            this.port.postMessage(this.buffer); // Send full buffer
+                            this.samplesCollected = 0; 
+                        }
+                        
+                        this.buffer.set(channelData, this.samplesCollected);
+                        this.samplesCollected += channelData.length;
+                        return true;
+                    }
+                }
+                registerProcessor('capture-processor', CaptureProcessor);
+            `;
+
+            const blob = new Blob([workletCode], { type: 'application/javascript' });
+            const workletUrl = URL.createObjectURL(blob);
+            try { await audioContext.audioWorklet.addModule(workletUrl); } catch (e) { }
+
+            const workletNode = new AudioWorkletNode(audioContext, 'capture-processor');
+
+            workletNode.port.onmessage = (e) => {
+                if (e.data.type === 'log') {
+                    console.log("🎤 " + e.data.message);
+                    return;
+                }
+
+                const rawBuffer = e.data;
+                const mockBuffer = {
+                    length: rawBuffer.length,
+                    sampleRate: audioContext.sampleRate,
+                    getChannelData: () => rawBuffer
+                };
+
+                // Use V2 Matcher with Smart Confidence
+                findMatchV2(mockBuffer).then(result => {
+                    if (!result) return;
+
+                    const { id: matchId, score } = result;
+
+                    // GET FRESH STATE
+                    const currentG = gameRef.current;
+                    const currentP = currentG.players.find(p => p.id === currentUser.id) || currentG.players[0];
+
+                    // DEBUG: Log what we are looking for
+                    // console.log(`🔍 Seeking matchId: "${matchId}" in grid of ${currentP.grid.length} cells`);
+
+                    // USE LOOSE EQUALITY (==) to handle String vs Number IDs
+                    const cell = currentP.grid.find(c => c.song && c.song.id == matchId);
+
+                    if (cell) {
+                        if (!cell.marked) {
+                            // STABILITY FILTER (Anti-Jitter)
+                            if (matchHistoryRef.current.id === cell.id) {
+                                matchHistoryRef.current.count++;
+                            } else {
+                                matchHistoryRef.current = { id: cell.id, count: 1 };
+                            }
+
+                            console.log(`🎤 Detection: ${cell.song.title} (${score.toFixed(2)}) - Streak: ${matchHistoryRef.current.count}`);
+
+                            if (matchHistoryRef.current.count >= 2) {
+                                console.log(`✅ STABLE MATCH FOUND: ${cell.song.title}`);
+                                setDetectedMatch(prev => {
+                                    if (prev && prev.cell.id === cell.id) return prev;
+                                    hapticClick();
+                                    return { cell, score };
+                                });
+                            }
+                        } else {
+                            console.log(`⚠️ Cell found but ALREADY MARKED: ${cell.song.title}`);
+                        }
+                    } else {
+                        console.log(`❌ Song detected (${score.toFixed(2)}) but NOT IN GRID: ID ${matchId}`);
+                    }
+                });
+            };
+
+            const gainNode = audioContext.createGain();
+            gainNode.gain.value = 0;
+
+            preAmp.connect(workletNode);
+            workletNode.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            setIsAutoListening(true);
+            mediaStreamRef.current.audioContext = audioContext;
+
+        } catch (e) {
+            console.error("AutoDaub error:", e);
+            alert("Erreur accès micro : " + e.message);
+            setIsAutoListening(false);
+            setIsAnalyzing(false);
+        }
+    };
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [searching, setSearching] = useState(false);
@@ -19,9 +206,22 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
     const [isMoveMode, setIsMoveMode] = useState(false);
     const [moveSourceIndex, setMoveSourceIndex] = useState(null);
     const [draggedItemIndex, setDraggedItemIndex] = useState(null);
-    const [playingUrl, setPlayingUrl] = useState(null);
     const [showGridOnGameOver, setShowGridOnGameOver] = useState(false);
-    const audioRef = useRef(null);
+    const [showShareModal, setShowShareModal] = useState(false);
+
+    const [shareImageBlob, setShareImageBlob] = useState(null);
+    const [showImageShareModal, setShowImageShareModal] = useState(false);
+    const shareRef = useRef(null);
+
+    // Use custom hook for audio
+    const { playingUrl, toggleAudio: baseToggleAudio } = useAudioPlayer();
+
+    // Wrapper to add haptic click which is specific to ActiveGame UI
+    const toggleAudio = (e, url) => {
+        e.stopPropagation();
+        hapticClick();
+        baseToggleAudio(url);
+    };
 
     useEffect(() => {
         const fetchFreshState = async () => {
@@ -41,6 +241,47 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
 
     const myPlayer = game.players.find(p => p.id === currentUser.id) || game.players[0];
     const isHost = game.hostId === currentUser.id;
+
+    // Helper for optimistic grid updates
+    const optimisticallyUpdateGrid = (newGrid) => {
+        const updatedPlayers = game.players.map(p =>
+            p.id === currentUser.id ? { ...p, grid: newGrid } : p
+        );
+        setGame(prev => ({ ...prev, players: updatedPlayers }));
+    };
+
+    // AUTO-DAUB LOGIC
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // Cleanup Effect
+    useEffect(() => {
+        return () => {
+            if (mediaStreamRef.current) {
+                mediaStreamRef.current.getTracks().forEach(track => track.stop());
+                if (mediaStreamRef.current.audioContext) {
+                    mediaStreamRef.current.audioContext.close();
+                }
+            }
+        };
+    }, []);
 
     const prevPlayersRef = useRef(game.players);
 
@@ -95,26 +336,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
 
     useEffect(() => { getTrendingSongs().then(setSearchResults); }, []);
 
-    const toggleAudio = (e, url) => {
-        e.stopPropagation();
-        hapticClick();
-        if (!url) return;
-        if (playingUrl === url) {
-            if (audioRef.current) {
-                audioRef.current.pause();
-                audioRef.current = null;
-            }
-            setPlayingUrl(null);
-        } else {
-            if (audioRef.current) audioRef.current.pause();
-            const audio = new Audio(url);
-            audio.volume = 0.5;
-            audio.onended = () => setPlayingUrl(null);
-            audio.play().catch(err => console.error("Audio error", err));
-            audioRef.current = audio;
-            setPlayingUrl(url);
-        }
-    };
+
 
     // DESKTOP DRAG & DROP HANDLERS
     const handleDragStart = (e, index) => {
@@ -149,10 +371,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
         newGrid[targetIdx] = sourceItem;
 
         // Optimistic Update
-        const updatedPlayers = game.players.map(p =>
-            p.id === currentUser.id ? { ...p, grid: newGrid } : p
-        );
-        setGame({ ...game, players: updatedPlayers });
+        optimisticallyUpdateGrid(newGrid);
 
         updatePlayerGrid(game.id, currentUser.id, newGrid);
         hapticSuccess();
@@ -204,16 +423,10 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
             const newMarkedState = !cell.marked;
 
             // We update local state immediately so it feels snappy
-            const updatedPlayers = game.players.map(p => {
-                if (p.id === currentUser.id) {
-                    const newGrid = p.grid.map(c =>
-                        c.id === cell.id ? { ...c, marked: newMarkedState } : c
-                    );
-                    return { ...p, grid: newGrid };
-                }
-                return p;
-            });
-            setGame({ ...game, players: updatedPlayers });
+            const newGrid = myPlayer.grid.map(c =>
+                c.id === cell.id ? { ...c, marked: newMarkedState } : c
+            );
+            optimisticallyUpdateGrid(newGrid);
 
             togglePlayerCell(game.id, currentUser.id, cell.id, newMarkedState);
         }
@@ -240,14 +453,11 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
         const newGrid = myPlayer.grid.map(c => c.id === selectedCellId ? { ...c, song: song } : c);
 
         // OPTIMISTIC UPDATE: Update local state immediately and close modal
-        const updatedPlayers = game.players.map(p =>
-            p.id === currentUser.id ? { ...p, grid: newGrid } : p
-        );
-        setGame(prev => ({ ...prev, players: updatedPlayers }));
+        optimisticallyUpdateGrid(newGrid);
+
         setSelectedCellId(null);
 
-        if (audioRef.current) audioRef.current.pause();
-        setPlayingUrl(null);
+        if (playingUrl) baseToggleAudio(playingUrl);
 
         // Send to DB in background
         await updatePlayerGrid(game.id, currentUser.id, newGrid, song);
@@ -298,11 +508,111 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
         // Alert removed
     }
 
-    const shareLink = () => {
+    const handleNativeShare = async () => {
         hapticClick();
         const url = `${window.location.origin}?game=${game.id}`;
-        navigator.clipboard.writeText(url);
-        // Alert removed
+        const shareData = {
+            title: 'ChronoBingo',
+            text: t(lang, 'game.shareText') + game.id,
+            url: url
+        };
+        if (typeof navigator !== 'undefined' && navigator.share) {
+            try {
+                await navigator.share(shareData);
+            } catch (err) {
+                console.error(err);
+            }
+        } else {
+            navigator.clipboard.writeText(url);
+            alert(t(lang, 'game.copied'));
+        }
+    };
+
+    const handleImageShare = async () => {
+        hapticClick();
+        setShowImageShareModal(true);
+        // Wait for modal to render content then snap it
+        setTimeout(async () => {
+            if (shareRef.current) {
+                try {
+                    // Shared onClone handler to fix truncation
+                    const fixTruncation = (clonedNode) => {
+                        const names = clonedNode.querySelectorAll('.share-name');
+                        names.forEach(n => {
+                            n.style.maxWidth = 'none';
+                            n.style.width = 'auto';
+                            n.style.overflow = 'visible';
+                            n.style.textOverflow = 'clip';
+                            n.style.whiteSpace = 'nowrap';
+                            n.classList.remove('truncate');
+                            // Reduce font size slightly to compensate for system font width appearing wider than webfont
+                            n.style.fontSize = '90%';
+                        });
+                    };
+
+                    // Attempt 1: High quality with smart filtering
+                    const blob = await toBlob(shareRef.current, {
+                        pixelRatio: 3,
+                        backgroundColor: '#0f172a',
+                        filter: (node) => node.tagName !== 'LINK' && !(node.getAttribute && node.getAttribute('data-broken') === 'true'),
+                        fontEmbedCSS: '',
+                        imagePlaceholder: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iIzMzMyIgZD0iTTEyIDJDMTYuNDEgMiAyMCA1LjU5IDIwIDEwUzE2LjQxIDE4IDEyIDE4IDQgMTQuNDEgNCAx十章 7.59 2 12 2zmMCAyYy0zLjMxIDAtNiAyLjY5LTYgNnM4IDIuNjkgNiA2IDYtMi42OSA2LTZzLTIuNjktNi02LTZ6bTQuMSAxM2wxLjkgMS45QzE2Ljc2IDIwLjIyIDE0LjUgMjIgMTIgMjJzLTQuNzYtMS43OC02LTAuMWwxLjktMS45QzkuMzEgMTguMDggMTAuNiAxNy41IDEyIDE3LjVzMi42OS41OCA0LjEgMS40eiIvPjwvc3ZnPg==',
+                        onClone: fixTruncation
+                    });
+                    setShareImageBlob(blob);
+                } catch (e) {
+                    console.log("High res screenshot failed, trying fallback...", e);
+                    try {
+                        // Attempt 2: Nuclear option - No images at all, just structure to ensure it works
+                        const blob = await toBlob(shareRef.current, {
+                            pixelRatio: 2,
+                            backgroundColor: '#0f172a',
+                            filter: (node) => node.tagName !== 'LINK' && node.tagName !== 'IMG',
+                            fontEmbedCSS: '',
+                            onClone: (clonedNode) => {
+                                const names = clonedNode.querySelectorAll('.share-name');
+                                names.forEach(n => {
+                                    n.style.maxWidth = 'none';
+                                    n.style.overflow = 'visible';
+                                    n.classList.remove('truncate');
+                                });
+                            }
+                        });
+                        setShareImageBlob(blob);
+                    } catch (e2) {
+                        console.error("All screenshot attempts failed", e2);
+                        alert("Impossible de générer l'image. Désolé !");
+                    }
+                }
+            }
+        }, 800);
+    };
+
+    const shareGeneratedImage = async () => {
+        if (!shareImageBlob) return;
+        hapticClick();
+
+        const file = new File([shareImageBlob], 'my-chronobingo-grid.png', { type: 'image/png' });
+
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: 'Mon ChronoBingo',
+                    text: 'Regarde ma grille ChronoBingo ! 🔥'
+                });
+            } catch (e) {
+                console.log("Share failed", e);
+            }
+        } else {
+            // Fallback: User can long press image to save
+            alert("Ton image est prête ! Appuie longuement dessus pour l'enregistrer ou la partager.");
+        }
+    };
+
+    const shareLink = () => {
+        hapticClick();
+        setShowShareModal(true);
     }
 
     const switchTab = (newTab) => { hapticClick(); setTab(newTab); }
@@ -382,14 +692,13 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                 </div>
 
                 <div className="flex flex-col items-center">
-                    <div className={`text-[10px] font-black px-3 py-1 rounded-full mb-1 uppercase tracking-widest ${game.status === 'finished' ? 'bg-fuchsia-500 text-white shadow-[0_0_10px_rgba(217,70,239,0.5)]' : isMyGridLocked ? 'bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-yellow-500 text-white shadow-[0_0_10px_rgba(234,179,8,0.5)]'}`}>
-                        {game.status === 'finished' ? t(lang, 'game.statusFinished') : (isMyGridLocked ? t(lang, 'game.statusPlaying') : t(lang, 'game.statusLobby'))}
-                    </div>
-                    <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-1 border border-white/10">
-                        <h1 className="font-black text-lg tracking-widest cursor-pointer elastic-active" onClick={copyCode}>
-                            <span className="text-cyan-400">{game.id}</span>
+                    <div className="flex items-center gap-3 bg-black/40 backdrop-blur-sm rounded-full pl-5 pr-2 py-1.5 border border-white/10 shadow-lg">
+                        <h1 className="font-black text-xl tracking-[0.2em] font-mono cursor-pointer elastic-active text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]" onClick={copyCode}>
+                            {game.id}
                         </h1>
-                        <button onClick={shareLink} className="text-slate-400 hover:text-white elastic-active">🔗</button>
+                        <button onClick={shareLink} className="w-8 h-8 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-full text-slate-300 hover:text-white transition-colors border border-white/5">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                        </button>
                     </div>
                 </div>
 
@@ -402,8 +711,10 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                     </button>
                 )}
 
-                {/* HOST FINISH BUTTON */}
+                {/* HOST FINISH BUTTON & TOOLS */}
                 <div className="flex-1 flex justify-end items-center gap-3">
+
+
                     {isHost && game.players.some(p => p.isGridLocked) && (
                         <button onClick={handleFinishGame} className="w-10 h-10 bg-red-500/20 border border-red-500 text-red-500 rounded-full flex items-center justify-center elastic-active shadow-[0_0_10px_rgba(239,68,68,0.4)]">
                             🛑
@@ -519,7 +830,27 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                         {isMyGridLocked && (
                             <div className="text-center p-4 glass-liquid rounded-3xl border border-fuchsia-500/20 mb-8 animate-pop">
                                 <p className="text-xs font-black text-fuchsia-400 uppercase tracking-widest mb-1">{t(lang, 'game.score')}</p>
-                                <p className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400">{myPlayer.score}</p>
+                                <div className="relative flex justify-center items-center h-20">
+                                    <p className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400">{myPlayer.score}</p>
+
+                                    {/* Auto-Daub Button - Smaller & Absolute to keep score centered */}
+                                    {game.status !== 'finished' && (
+                                        <button
+                                            onClick={toggleAutoDaub}
+                                            className={`absolute right-4 w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all shadow-lg active:scale-95 ${isAutoListening ? 'bg-fuchsia-500 border-white text-white animate-pulse shadow-fuchsia-500/50' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-fuchsia-500/50 hover:text-white'}`}
+                                            title="Auto-Cochage"
+                                        >
+                                            {isAnalyzing ? (
+                                                <span className="animate-spin text-base">⌛</span>
+                                            ) : (
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={`w-5 h-5 ${isAutoListening ? 'text-white' : 'text-current'}`}>
+                                                    <path d="M8.25 4.5a3.75 3.75 0 117.5 0v8.25a3.75 3.75 0 11-7.5 0V4.5z" />
+                                                    <path d="M6 10.5a.75.75 0 01.75.75v1.5a5.25 5.25 0 1010.5 0v-1.5a.75.75 0 011.5 0v1.5a6.751 6.751 0 01-6 6.709v2.291h3a.75.75 0 010 1.5h-7.5a.75.75 0 010-1.5h3v-2.291a6.751 6.751 0 01-6-6.709v-1.5A.75.75 0 016 10.5z" />
+                                                </svg>
+                                            )}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -587,28 +918,73 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                         {game.players.sort((a, b) => b.score - a.score).map((p, i) => (
                             <div key={p.id} className={`flex items-center p-4 rounded-2xl border ${p.id === currentUser.id ? 'bg-slate-800 border-cyan-500 shadow-lg' : 'glass-liquid border-transparent'}`}>
                                 <div className={`font-black w-8 text-center mr-2 ${i === 0 ? 'text-yellow-400 text-xl' : 'text-slate-500'}`}>{i + 1}</div>
-                                <img src={p.avatar} className="w-12 h-12 rounded-full mr-4 border-2 border-slate-700 object-cover" alt="avt" />
+                                <div className="relative mr-4">
+                                    <img src={p.avatar} className="w-12 h-12 rounded-full border-2 border-slate-700 object-cover" alt="avt" />
+                                    {p.id === game.hostId && (
+                                        <div className="absolute -bottom-1 -right-1 bg-fuchsia-600 text-white p-1 rounded-full border-2 border-slate-900 shadow-sm" title="Hôte">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
+                                                <path fillRule="evenodd" d="M9.293 2.293a1 1 0 011.414 0l7 7A1 1 0 0117 11h-1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-3a1 1 0 00-1-1H9a1 1 0 00-1 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-6H3a1 1 0 01-.707-1.707l7-7z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                    )}
+                                </div>
                                 <div className="flex-1">
                                     <p className="font-bold text-base text-white">{p.name} {p.id === game.hostId && '👑'}</p>
                                     <p className="text-xs text-slate-400 font-bold uppercase">{p.bingoCount > 0 ? `🔥 ${p.bingoCount} BINGO!` : t(lang, 'game.playing')}</p>
                                 </div>
-                                <div className="text-right">
-                                    <p className="font-black text-2xl text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400">{p.score}</p>
+                                <div className="flex items-center gap-2 pl-2">
+                                    {p.id === currentUser.id && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleImageShare(); }}
+                                            className="w-8 h-8 flex items-center justify-center bg-cyan-500/10 text-cyan-400 rounded-full border border-cyan-500/30 hover:bg-cyan-500 hover:text-white transition-colors"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                                <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
+                                            </svg>
+                                        </button>
+                                    )}
+                                    {isHost && (
+                                        <div className="flex items-center gap-2">
+                                            {p.id !== currentUser.id && (
+                                                <button
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        if (confirm(t(lang, 'game.confirmExcludePlayer'))) {
+                                                            hapticClick();
+                                                            await removePlayer(game.id, p.id);
+                                                        }
+                                                    }}
+                                                    className="w-8 h-8 flex items-center justify-center bg-red-500/20 text-red-500 rounded-full hover:bg-red-500 hover:text-white transition-colors"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                                        <path d="M11 6a3 3 0 11-6 0 3 3 0 016 0zM14 17a6 6 0 00-12 0h12zM13 8a1 1 0 100 2h4a1 1 0 100-2h-4z" />
+                                                    </svg>
+                                                </button>
+                                            )}
+                                            {p.isGridLocked && (
+                                                <button
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        if (confirm(t(lang, 'game.confirmUnlockPlayer'))) {
+                                                            hapticClick();
+                                                            await togglePlayerGridLock(game.id, p.id);
+                                                        }
+                                                    }}
+                                                    className="w-8 h-8 flex items-center justify-center bg-emerald-500/20 text-emerald-500 rounded-full hover:bg-emerald-500 hover:text-white transition-colors"
+                                                    title="Déverrouiller"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                                        <path fillRule="evenodd" d="M10 2a4 4 0 00-4 4v1H5a1 1 0 00-.994.89l-1 9A1 1 0 004 18h12a1 1 0 00.994-1.11l-1-9A1 1 0 0015 7h-1V6a4 4 0 00-4-4zm2 5V6a2 2 0 10-4 0v1h4zm-6 3a1 1 0 112 0 1 1 0 01-2 0zm7-1a1 1 0 100 2 1 1 0 000-2z" clipRule="evenodd" className="hidden" /> {/* Standard Lock */}
+                                                        <path d="M10 2a5 5 0 00-5 5v2a2 2 0 00-2 2v5a2 2 0 002 2h10a2 2 0 002-2v-5a2 2 0 00-2-2H7V7a3 3 0 015.905-.75 1 1 0 001.937-.5A5.002 5.002 0 0010 2z" /> {/* Open Lock */}
+                                                    </svg>
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                    <div className="text-right">
+                                        <p className="font-black text-2xl text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400">{p.score}</p>
+                                    </div>
                                 </div>
-                                {isHost && p.id !== currentUser.id && (
-                                    <button
-                                        onClick={async (e) => {
-                                            e.stopPropagation();
-                                            if (confirm("Exclure ce joueur ?")) {
-                                                hapticClick();
-                                                await removePlayer(game.id, p.id);
-                                            }
-                                        }}
-                                        className="ml-3 w-8 h-8 flex items-center justify-center bg-red-500/20 text-red-500 rounded-full hover:bg-red-500 hover:text-white transition-colors"
-                                    >
-                                        ✕
-                                    </button>
-                                )}
                             </div>
                         ))}
 
@@ -618,7 +994,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                     onClick={async () => { hapticClick(); await toggleSaveGame(game.id, !game.isSaved); }}
                                     className={`px-4 py-3 rounded-xl font-bold uppercase tracking-widest text-xs border transition-all flex items-center gap-2 ${game.isSaved ? 'bg-green-500/20 text-green-400 border-green-500' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-white'}`}
                                 >
-                                    {game.isSaved ? '✅ Partie Sauvegardée' : '💾 Sauvegarder la partie'}
+                                    {game.isSaved ? t(lang, 'game.btnGameSaved') : t(lang, 'game.btnSaveGame')}
                                 </button>
                             </div>
                         )}
@@ -631,7 +1007,10 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                 selectedCellId && (
                     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center sm:p-4 animate-in fade-in duration-200">
                         {/* Backdrop */}
-                        <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => { setSelectedCellId(null); if (audioRef.current) audioRef.current.pause(); setPlayingUrl(null); }}></div>
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => {
+                            setSelectedCellId(null);
+                            if (playingUrl) baseToggleAudio(playingUrl);
+                        }}></div>
 
                         {/* Modal Content */}
                         <div className="relative w-full max-w-lg h-[99vh] md:h-[80vh] bg-slate-900/60 backdrop-blur-2xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-t-3xl md:rounded-3xl flex flex-col overflow-hidden animate-slide-up">
@@ -653,7 +1032,10 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                     </button>
                                 </div>
                                 <button
-                                    onClick={() => { setSelectedCellId(null); if (audioRef.current) audioRef.current.pause(); setPlayingUrl(null); }}
+                                    onClick={() => {
+                                        setSelectedCellId(null);
+                                        if (playingUrl) baseToggleAudio(playingUrl);
+                                    }}
                                     className="w-10 h-10 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center text-slate-400 hover:text-white transition-colors border border-white/5"
                                 >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -723,6 +1105,239 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                     </div>
                 )
             }
+            {/* SHARE MODAL */}
+            {showShareModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onClick={() => setShowShareModal(false)}>
+                    <div className="bg-slate-900 border border-white/10 p-6 rounded-3xl w-full max-w-sm flex flex-col items-center animate-pop" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => setShowShareModal(false)} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-white/10 rounded-full text-slate-400 hover:text-white hover:bg-white/20 transition-colors">✕</button>
+
+                        <h3 className="text-2xl font-black text-white mb-8 uppercase tracking-wider text-center">{t(lang, 'game.shareTitle')}</h3>
+
+                        <div className="bg-white p-4 rounded-xl mb-4 shadow-[0_0_30px_rgba(255,255,255,0.1)]">
+                            <QRCodeSVG value={`${typeof window !== 'undefined' ? window.location.origin : ''}?game=${game.id}`} size={200} />
+                        </div>
+
+                        <p className="text-slate-400 font-bold mb-6 uppercase text-[10px] tracking-widest">{t(lang, 'game.shareScan')}</p>
+
+                        <div className="w-full h-px bg-white/10 mb-6"></div>
+
+                        <p className="text-slate-500 font-bold mb-1 uppercase text-[10px] tracking-widest">{t(lang, 'game.code')}</p>
+                        <div className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-fuchsia-500 mb-8 tracking-widest font-mono select-all hover:scale-105 transition-transform cursor-pointer" onClick={copyCode}>
+                            {game.id}
+                        </div>
+
+                        <button
+                            onClick={handleNativeShare}
+                            className="w-full py-4 bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white font-bold rounded-2xl uppercase tracking-widest hover:brightness-110 transition-all shadow-lg elastic-active flex items-center justify-center gap-2"
+                        >
+                            <span>📤</span> {t(lang, 'game.shareInvite')}
+                        </button>
+                    </div>
+                </div>
+            )}
+            {/* IMAGE SHARE MODAL */}
+            {showImageShareModal && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+                    <div className="bg-slate-900 rounded-3xl w-full max-w-sm overflow-hidden flex flex-col relative border border-white/10 shadow-2xl">
+                        <button
+                            onClick={() => { setShowImageShareModal(false); setShareImageBlob(null); }}
+                            className="absolute top-2 right-2 z-20 w-8 h-8 flex items-center justify-center bg-black/50 text-white rounded-full hover:bg-black/70"
+                        >✕</button>
+
+                        <div className="p-4 flex flex-col items-center">
+                            <h3 className="text-white font-black uppercase tracking-widest mb-4 text-center">Story Preview</h3>
+
+                            {/* The Capture Area (Off-screen or visible but styled for capture) */}
+                            <div ref={shareRef} className="aspect-[9/16] w-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6 flex flex-col items-center justify-center relative rounded-2xl overflow-hidden border border-white/10 mb-4 select-none">
+                                {/* Decor */}
+                                {
+                                    /* Decor - Using CSS Gradients instead of filter blur for html2canvas support */
+                                }
+                                <div className="absolute top-[-20%] right-[-20%] w-[80%] h-[80%] opacity-40" style={{ background: 'radial-gradient(circle, rgba(217,70,239,1) 0%, rgba(217,70,239,0) 70%)' }}></div>
+                                <div className="absolute bottom-[-20%] left-[-20%] w-[80%] h-[80%] opacity-40" style={{ background: 'radial-gradient(circle, rgba(6,182,212,1) 0%, rgba(6,182,212,0) 70%)' }}></div>
+
+                                <div className="relative z-10 flex flex-col items-center w-full h-full justify-between py-4">
+                                    <div className="text-center">
+                                        {/* Fix for html2canvas: Use solid color or text-shadow instead of bg-clip-text */}
+                                        <h1 className="text-3xl font-black text-fuchsia-400 italic drop-shadow-[0_2px_0_rgba(255,255,255,1)]">ChronoBingo</h1>
+                                        <p className="text-white/60 text-xs font-bold uppercase tracking-[0.3em]">Party Game</p>
+                                    </div>
+
+                                    {/* Grid - Tilted as requested */}
+                                    <div className="grid grid-cols-4 gap-2 w-full aspect-square bg-black/80 p-2 rounded-2xl border border-white/10 shadow-2xl scale-90 transform rotate-2 my-auto">
+                                        {myPlayer.grid.map((c, i) => (
+                                            <div key={i} className={`relative rounded-md overflow-hidden aspect-square ${c.marked ? 'bg-fuchsia-500' : 'bg-white/10'}`}>
+                                                {c.song ? (
+                                                    <>
+                                                        {/* HTML2Canvas dislikes mix-blend-mode and filters. We use simple opacity layers instead. */}
+                                                        <img src={c.song.cover} className="absolute inset-0 w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
+
+                                                        {/* Unmarked: Darken it significantly */}
+                                                        {!c.marked && <div className="absolute inset-0 bg-slate-900/60"></div>}
+
+                                                        {/* Marked: Add a colorful tint (without mix-blend-mode) */}
+                                                        {c.marked && <div className="absolute inset-0 bg-fuchsia-500/20"></div>}
+                                                    </>
+                                                ) : <div className="w-full h-full flex items-center justify-center text-[10px] opacity-20">🎵</div>}
+
+                                                {c.marked && (
+                                                    <div className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center border border-white shadow-sm z-10">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 text-white">
+                                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                        </svg>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="w-full px-2 mt-2">
+                                        {/* PODIUM LOGIC */}
+                                        <div className="flex items-end justify-center gap-3 mb-2">
+                                            {/* Rank 2 */}
+                                            {game.players.sort((a, b) => b.score - a.score)[1] && (
+                                                <div className="flex flex-col items-center">
+                                                    <div className="relative w-10 h-10 mb-1 rounded-full border-2 border-slate-400">
+                                                        <img src={game.players.sort((a, b) => b.score - a.score)[1].avatar} className="w-full h-full object-cover rounded-full" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
+                                                    </div>
+                                                    <div className="share-name bg-slate-800/80 px-2 py-0.5 rounded text-[8px] font-bold text-white mb-1 truncate max-w-[80px]">{game.players.sort((a, b) => b.score - a.score)[1].name}</div>
+                                                    <div className="h-8 w-10 bg-slate-400/40 rounded-t-lg border-t border-x border-slate-400/50 flex items-center justify-center">
+                                                        <span className="text-[10px] font-black text-slate-200">2</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {/* Rank 1 */}
+                                            {game.players.sort((a, b) => b.score - a.score)[0] && (
+                                                <div className="flex flex-col items-center z-10">
+                                                    <div className="relative w-14 h-14 mb-1 rounded-full border-2 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)]">
+                                                        <img src={game.players.sort((a, b) => b.score - a.score)[0].avatar} className="w-full h-full object-cover rounded-full" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
+                                                        <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 text-base">👑</div>
+                                                    </div>
+                                                    <div className="share-name bg-slate-800/80 px-2 py-0.5 rounded text-[8px] font-bold text-yellow-400 mb-1 truncate max-w-[100px]">{game.players.sort((a, b) => b.score - a.score)[0].name}</div>
+                                                    <div className="h-12 w-12 bg-yellow-400/40 rounded-t-lg border-t border-x border-yellow-400/50 flex items-center justify-center flex-col">
+                                                        <span className="text-xs font-black text-white">{game.players.sort((a, b) => b.score - a.score)[0].score}</span>
+                                                        <span className="text-[8px] text-yellow-200 uppercase">pts</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {/* Rank 3 */}
+                                            {game.players.sort((a, b) => b.score - a.score)[2] && (
+                                                <div className="flex flex-col items-center">
+                                                    <div className="relative w-10 h-10 mb-1 rounded-full border-2 border-orange-700">
+                                                        <img src={game.players.sort((a, b) => b.score - a.score)[2].avatar} className="w-full h-full object-cover rounded-full" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
+                                                    </div>
+                                                    <div className="share-name bg-slate-800/80 px-2 py-0.5 rounded text-[8px] font-bold text-white mb-1 truncate max-w-[80px]">{game.players.sort((a, b) => b.score - a.score)[2].name}</div>
+                                                    <div className="h-6 w-10 bg-orange-700/40 rounded-t-lg border-t border-x border-orange-700/50 flex items-center justify-center">
+                                                        <span className="text-[10px] font-black text-orange-200">3</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* IF USER NOT IN TOP 3, SHOW THEM BELOW */}
+                                        {!game.players.sort((a, b) => b.score - a.score).slice(0, 3).some(p => p.id === currentUser.id) && (
+                                            <div className="flex flex-col items-center gap-2">
+                                                <div className="flex items-center gap-3 bg-black/40 px-4 py-2 rounded-full border border-white/20">
+                                                    <img src={currentUser.avatar} className="w-10 h-10 rounded-full border-2 border-white" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
+                                                    <div className="min-w-0">
+                                                        <p className="share-name text-white font-bold text-sm truncate max-w-[120px]">{currentUser.name}</p>
+                                                        <p className="text-fuchsia-400 font-black text-xs uppercase">{myPlayer.score} PTS</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* FOOTER - MORE ENTICING & LOWER */}
+                                    <div className="mt-auto mb-0 flex flex-col items-center pt-8">
+                                        <div className="bg-fuchsia-600/20 border border-fuchsia-500/50 px-3 py-0.5 rounded-full shadow-[0_0_15px_rgba(217,70,239,0.15)] backdrop-blur-sm">
+                                            <span className="text-white font-bold text-[10px] tracking-wider">chronobingo.com</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {shareImageBlob ? (
+                                <button
+                                    onClick={shareGeneratedImage}
+                                    className="w-full py-4 bg-fuchsia-600 text-white font-black rounded-xl shadow-lg hover:bg-fuchsia-500 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                                        <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
+                                    </svg>
+                                    Partager en Story
+                                </button>
+                            ) : (
+                                <div className="text-white/50 text-sm animate-pulse">Génération de l'image...</div>
+                            )}
+
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MATCH DETECTED POPUP */}
+            {detectedMatch && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-slate-800 border-2 border-indigo-500/50 p-6 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
+                        <div className="text-center space-y-1">
+                            <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">
+                                🎵 Chanson Détectée !
+                            </h3>
+                            <p className="text-slate-400 text-sm">Est-ce bien ce titre ?</p>
+                        </div>
+
+                        {detectedMatch.cell.song.cover && (
+                            <div className="relative w-32 h-32 rounded-xl overflow-hidden shadow-lg ring-2 ring-indigo-500/30">
+                                <img
+                                    src={detectedMatch.cell.song.cover}
+                                    className="w-full h-full object-cover"
+                                    alt="Cover"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                                <div className={`absolute bottom-2 right-2 px-2 py-0.5 rounded text-xs font-bold font-mono ${detectedMatch.score > 0.5 ? 'bg-green-500/90 text-white' : 'bg-yellow-500/90 text-black'
+                                    }`}>
+                                    {(detectedMatch.score * 100).toFixed(0)}%
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="text-center">
+                            <h4 className="font-bold text-white text-lg leading-tight mb-1">
+                                {detectedMatch.cell.song.title}
+                            </h4>
+                            <p className="text-indigo-300 text-sm">
+                                {detectedMatch.cell.song.artist}
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 w-full mt-2">
+                            <button
+                                onClick={() => {
+                                    hapticFeedback();
+                                    setDetectedMatch(null);
+                                    // Maybe add to ignore list?
+                                }}
+                                className="w-full py-3 rounded-xl bg-slate-700/50 text-slate-300 font-bold hover:bg-slate-700 active:scale-95 transition-all"
+                            >
+                                Non
+                            </button>
+                            <button
+                                onClick={() => {
+                                    hapticSuccess();
+                                    togglePlayerCell(game.id, currentUser.id, detectedMatch.cell.id, true);
+                                    sendNotification("Chanson trouvée !", `C'est ${detectedMatch.cell.song.title} !`);
+                                    setDetectedMatch(null);
+                                }}
+                                className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold shadow-lg shadow-indigo-500/25 active:scale-95 transition-all"
+                            >
+                                Oui, valider !
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div >
     );
 };

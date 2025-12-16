@@ -28,7 +28,7 @@ const StarryBackground = () => {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[-1] overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 pointer-events-none">
+    <div className="fixed top-0 left-0 w-full h-[100dvh] z-[-1] overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 pointer-events-none">
       <div ref={containerRef} className="absolute inset-0 opacity-50"></div>
       {/* Disco Lights effect */}
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-fuchsia-600/20 rounded-full blur-[100px] mix-blend-screen animate-pulse"></div>

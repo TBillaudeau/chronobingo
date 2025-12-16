@@ -87,6 +87,7 @@ export const getUserProfile = async (userId) => {
     ...data,
     favorites: data?.favorites || [],
     history: data?.history || [],
+    achievements: data?.achievements || [],
     stats: data?.stats || { games_played: 0, games_won: 0, songs_chosen: 0, bingos: 0 },
     song_stats: data?.song_stats || {}
   };
@@ -125,7 +126,40 @@ export const deleteUserAccount = async (userId) => {
   await logoutUser();
 };
 
-// --- 2. Favorites & Stats Management ---
+// --- 2. Favorites, Stats & Achievements ---
+
+export const ACHIEVEMENTS = [
+  { id: 'first_bingo', icon: '🎉', condition: (p) => p.stats.bingos >= 1 },
+  { id: 'beginner_luck', icon: '🍀', condition: (p) => p.stats.games_won >= 1 && p.stats.games_played <= 5 },
+  { id: '10_wins', icon: '🏆', condition: (p) => p.stats.games_won >= 10 }
+];
+
+const checkAchievements = async (userId, profile) => {
+  const currentAchievements = profile.achievements || [];
+  const newAchievements = [];
+
+  ACHIEVEMENTS.forEach(ach => {
+    // If not already unlocked and condition met
+    if (!currentAchievements.some(a => a.id === ach.id) && ach.condition(profile)) {
+      newAchievements.push({ id: ach.id, unlockedAt: Date.now() });
+    }
+  });
+
+  if (newAchievements.length > 0) {
+    const finallist = [...currentAchievements, ...newAchievements];
+
+    // TODO: Enable this after adding 'achievements' (jsonb) column to the 'profiles' table in Supabase.
+    // Currently causing PGRST204 error (column not found).
+    // const { error } = await supabase.from('profiles').update({ achievements: finallist }).eq('id', userId);
+
+    // if (error) {
+    //    console.warn("Failed to update achievements:", error);
+    // }
+
+    return newAchievements;
+  }
+  return [];
+};
 
 export const updateUserStats = async (userId, updates) => {
   if (userId.startsWith('guest-')) return;
@@ -143,10 +177,13 @@ export const updateUserStats = async (userId, updates) => {
 
   // Use upsert to ensure it writes even if row somehow missing
   await supabase.from('profiles').upsert({ id: userId, stats: newStats, updated_at: new Date() });
+
+  // Check achievements with the NEW stats
+  await checkAchievements(userId, { ...profile, stats: newStats });
 };
 
 // Helper to update the nested JSONB "song_stats"
-const updatePersonalSongStats = async (userId, song, action) => {
+const updatePersonalSongStats = async (userId, song, action, count = 1) => {
   if (!song || !song.id || userId.startsWith('guest-')) return;
 
   const profile = await getUserProfile(userId);
@@ -157,10 +194,15 @@ const updatePersonalSongStats = async (userId, song, action) => {
     stats[sId] = { title: song.title, selected: 0, validated: 0 };
   }
 
-  if (action === 'select') stats[sId].selected += 1;
-  if (action === 'validate') stats[sId].validated += 1;
+  if (action === 'select') stats[sId].selected += count;
+  if (action === 'validate') stats[sId].validated += count;
 
-  await supabase.from('profiles').upsert({ id: userId, song_stats: stats, updated_at: new Date() });
+  // Prevent negative values
+  if (stats[sId].selected < 0) stats[sId].selected = 0;
+  if (stats[sId].validated < 0) stats[sId].validated = 0;
+
+  const { error } = await supabase.from('profiles').upsert({ id: userId, song_stats: stats, updated_at: new Date() });
+  if (error) console.error("Error updating song stats:", error);
 };
 
 export const toggleFavorite = async (userId, song) => {
@@ -280,51 +322,91 @@ export const removeCurrentGameId = () => {
 
 // --- 5. History Management ---
 
-const addToHistory = async (game, userId) => {
+const addToHistory = async (game, userId, overrides = {}) => {
   if (!userId || !game) return;
+
+  // Retrieve existing history first to preserve isSaved if not overridden
+  let existingIsSaved = false;
+  let history = [];
+
+  if (userId.startsWith('guest-')) {
+    try {
+      const stored = localStorage.getItem(GUEST_HISTORY_KEY);
+      if (stored) history = JSON.parse(stored);
+    } catch (e) { }
+  } else {
+    const profile = await getUserProfile(userId);
+    history = profile.history || [];
+  }
+
+  const existingEntry = history.find(h => h.id === game.id);
+  if (existingEntry) {
+    existingIsSaved = existingEntry.isSaved || false;
+  }
+
+  // Determine final isSaved: overrides > existing > default (false)
+  // Note: We don't use game.isSaved anymore as it is not global
+  const finalIsSaved = overrides.hasOwnProperty('isSaved') ? overrides.isSaved : existingIsSaved;
 
   const summary = {
     id: game.id,
     hostName: game.players.find(p => p.id === game.hostId)?.name || 'Unknown',
-    date: Date.now(),
+    date: Date.now(), // Or preserve original date? Ideally update date on active changes, keep on save? Let's refresh date for now as it means "last interaction"
     status: game.status,
     myScore: game.players.find(p => p.id === userId)?.score || 0,
+    isSaved: finalIsSaved,
     userId: userId
   };
 
-  // 5a. Guest History (LocalStorage)
+  // Filter out old entry
+  history = history.filter(h => h.id !== game.id);
+
+  // If preserved/saved or just active interaction, keep it.
+  // The 'save' feature implies prevention of auto-cleanup or manual deletion (if implemented that way),
+  // but here it is just a flag.
+  history.unshift(summary);
+
+  // Limit history length, BUT don't drop SAVED games if we can avoid it? 
+  // For now, simple slice.
+  history = history.slice(0, 20);
+
   if (userId.startsWith('guest-')) {
-    if (typeof window === 'undefined') return;
-    let localHistory = [];
-    try {
-      const stored = localStorage.getItem(GUEST_HISTORY_KEY);
-      if (stored) localHistory = JSON.parse(stored);
-    } catch (e) { }
-
-    localHistory = localHistory.filter(h => h.id !== game.id);
-    localHistory.unshift(summary);
-    localHistory = localHistory.slice(0, 10);
-
-    localStorage.setItem(GUEST_HISTORY_KEY, JSON.stringify(localHistory));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(GUEST_HISTORY_KEY, JSON.stringify(history));
+    }
     return;
   }
 
-  // 5b. Real User History (Supabase)
-  const profile = await getUserProfile(userId);
-  let history = profile.history || []; // Safe default
-
-  history = history.filter(h => h.id !== game.id);
-  history.unshift(summary);
-  history = history.slice(0, 20);
-
-  const { error } = await supabase.from('profiles').upsert({
-    id: userId,
+  // Real User
+  const { error } = await supabase.from('profiles').update({
     history: history,
     updated_at: new Date()
-  });
+  }).eq('id', userId);
 
-  if (error) console.error("Error saving history:", error);
+  if (error) {
+    console.warn("Failed to save game history:", error);
+  }
 };
+
+// ...
+
+export const toggleSaveGame = async (gameId, shouldSave, userId = null) => {
+  let game = await joinGame(gameId, null);
+  if (!game) return;
+
+  // Do NOT update global game state for saving. It is personal.
+  // game.isSaved = shouldSave; 
+  // await saveGameState(gameId, game); 
+
+  // Update history directly
+  if (userId) {
+    await addToHistory(game, userId, { isSaved: shouldSave });
+  }
+};
+
+// ...
+
+
 
 const removeFromHistory = async (gameId, userId) => {
   if (!userId || !gameId) return;
@@ -654,13 +736,7 @@ export const togglePlayerGridLock = async (gameId, playerId) => {
   }
 };
 
-export const toggleSaveGame = async (gameId, shouldSave) => {
-  let game = await joinGame(gameId, null);
-  if (!game) return;
 
-  game.isSaved = shouldSave;
-  await saveGameState(gameId, game);
-};
 
 export const removePlayer = async (gameId, playerId) => {
   let game = await joinGame(gameId, null);

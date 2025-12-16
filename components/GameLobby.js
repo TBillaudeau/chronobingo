@@ -177,7 +177,7 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
               <h2 className="text-2xl font-black text-white tracking-tight">{t(lang, 'lobby.hello')}, {user.name} !</h2>
               <p className="text-fuchsia-300 text-sm font-medium">{t(lang, 'profile.vipRole')}</p>
             </div>
-            <div className="bg-white/10 p-3 rounded-full group-hover:bg-white/20 transition-colors">
+            <div className="w-12 h-12 shrink-0 aspect-square bg-white/10 rounded-full flex items-center justify-center group-hover:bg-white/20 transition-colors">
               <span className="text-xl block group-hover:rotate-90 transition-transform duration-500">⚙️</span>
             </div>
           </div>

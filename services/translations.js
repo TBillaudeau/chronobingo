@@ -42,7 +42,17 @@ export const dictionary = {
       guestMode: "Mode Invité",
       guestModeDesc: "Connecte-toi pour faire +",
       guestLogin: "CONNEXION",
-      guestSettings: "Paramètres"
+      guestSettings: "Paramètres",
+      batterySaver: "Mode Éco (OLED)",
+      batterySaverDesc: "Désactive les animations, fond noir pur.",
+      installApp: "Installer l'app",
+      achievements: "Succès",
+      badge_first_bingo: "Premier Bingo",
+      badge_first_bingo_desc: "Tu as crié BINGO pour la première fois !",
+      badge_10_wins: "Champion",
+      badge_10_wins_desc: "10 parties gagnées. La classe.",
+      badge_beginner_luck: "Chance du Débutant",
+      badge_beginner_luck_desc: "Une victoire dès tes débuts !"
     },
     game: {
       statusPlaying: "EN COURS",
@@ -80,7 +90,17 @@ export const dictionary = {
       btnReorder: "Réorganiser",
       btnUnlock: "Déverrouiller ma grille",
       lockHint: "Verrouille ta grille pour commencer à jouer !",
-      gridLockedNoEdit: "⛔ Ta grille est verrouillée ! Tu ne peux plus ajouter de chansons."
+      lockHint: "Verrouille ta grille pour commencer à jouer !",
+      gridLockedNoEdit: "⛔ Ta grille est verrouillée ! Tu ne peux plus ajouter de chansons.",
+      confirmUnlockPlayer: "Déverrouiller la grille de ce joueur ?",
+      confirmUnlockPlayer: "Déverrouiller la grille de ce joueur ?",
+      confirmExcludePlayer: "Exclure ce joueur ?",
+      btnSaveGame: "Sauvegarder la partie",
+      btnGameSaved: "✅ Partie Sauvegardée",
+      shareTitle: "Rejoindre",
+      shareScan: "Scanne pour rejoindre",
+      shareInvite: "Inviter des amis",
+      shareText: "Rejoins ma partie de ChoronoBingo ! Code: "
     },
     profile: {
       title: "Mon Profil",
@@ -110,7 +130,10 @@ export const dictionary = {
       deleteAccount: "Supprimer mon compte",
       deleteConfirm: "Es-tu sûr de vouloir supprimer ton compte ? Cette action est irréversible et effacera toutes tes statistiques et favoris.",
       deleteGameConfirm: "Supprimer cette partie ?",
-      quitGameConfirm: "Voulez-vous vraiment quitter la partie ?"
+      quitGameConfirm: "Voulez-vous vraiment quitter la partie ?",
+      btnSave: "Sauvegarder",
+      btnSaved: "Sauvegardée",
+      btnDelete: "Supprimer"
     }
   },
   en: {
@@ -155,7 +178,17 @@ export const dictionary = {
       guestMode: "Guest Mode",
       guestModeDesc: "Log in to do more",
       guestLogin: "LOGIN",
-      guestSettings: "Settings"
+      guestSettings: "Settings",
+      batterySaver: "Eco Mode (OLED)",
+      batterySaverDesc: "Disables animations, pure black background.",
+      installApp: "Install App",
+      achievements: "Achievements",
+      badge_first_bingo: "First Bingo",
+      badge_first_bingo_desc: "You shouted BINGO for the first time!",
+      badge_10_wins: "Champion",
+      badge_10_wins_desc: "10 games won. Respect.",
+      badge_beginner_luck: "Beginner's Luck",
+      badge_beginner_luck_desc: "A victory right at the start!"
     },
     game: {
       statusPlaying: "PLAYING",
@@ -193,7 +226,17 @@ export const dictionary = {
       btnReorder: "Reorder",
       btnUnlock: "Unlock my grid",
       lockHint: "Lock your grid to start playing!",
-      gridLockedNoEdit: "⛔ Your grid is locked! You can't add more songs."
+      lockHint: "Lock your grid to start playing!",
+      gridLockedNoEdit: "⛔ Your grid is locked! You can't add more songs.",
+      confirmUnlockPlayer: "Unlock this player's grid?",
+      confirmUnlockPlayer: "Unlock this player's grid?",
+      confirmExcludePlayer: "Exclude this player?",
+      btnSaveGame: "Save Game",
+      btnGameSaved: "✅ Game Saved",
+      shareTitle: "Join",
+      shareScan: "Scan to join",
+      shareInvite: "Invite Friends",
+      shareText: "Join my ChronoBingo party! Code: "
     },
     profile: {
       title: "My Profile",
@@ -223,7 +266,10 @@ export const dictionary = {
       deleteAccount: "Delete my account",
       deleteConfirm: "Are you sure you want to delete your account? This action is irreversible and will erase all your stats and favorites.",
       deleteGameConfirm: "Delete this game from history?",
-      quitGameConfirm: "Do you really want to quit the game?"
+      quitGameConfirm: "Do you really want to quit the game?",
+      btnSave: "Save",
+      btnSaved: "Saved",
+      btnDelete: "Delete"
     }
   }
 };
