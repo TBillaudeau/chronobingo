@@ -121,11 +121,18 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
 
             const workletNode = new AudioWorkletNode(audioContext, 'capture-processor');
 
+            let lastCheck = 0;
+
             workletNode.port.onmessage = (e) => {
                 if (e.data.type === 'log') {
                     console.log("🎤 " + e.data.message);
                     return;
                 }
+
+                // DUTY CYCLE: Throttle to 1 check per second to save battery
+                const now = Date.now();
+                if (now - lastCheck < 1000) return;
+                lastCheck = now;
 
                 const rawBuffer = e.data;
                 const mockBuffer = {
@@ -134,8 +141,16 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                     getChannelData: () => rawBuffer
                 };
 
-                // Use V2 Matcher with Smart Confidence
-                findMatchV2(mockBuffer).then(result => {
+                const currentG = gameRef.current;
+                const currentP = currentG.players.find(p => p.id === currentUser.id) || currentG.players[0];
+
+                // OPTIMIZATION: Get IDs of already marked cells to skip searching for them
+                const ignoredIds = currentP.grid
+                    .filter(c => c.song && c.marked)
+                    .map(c => c.song.id);
+
+                // Use V2 Matcher with Smart Confidence and Ignore List
+                findMatchV2(mockBuffer, ignoredIds).then(result => {
                     if (!result) return;
 
                     const { id: matchId, score } = result;
@@ -213,15 +228,34 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
     const [showImageShareModal, setShowImageShareModal] = useState(false);
     const shareRef = useRef(null);
 
-    // Use custom hook for audio
-    const { playingUrl, toggleAudio: baseToggleAudio } = useAudioPlayer();
+    // AUDIO HANDLING
+    const { playingUrl, toggleAudio: hookToggleAudio } = useAudioPlayer((songId, freshUrl) => {
+        // We need to find the correct player object here because 'myPlayer' variable might be stale or not defined in this closure scope if defined later.
+        // Or we rely on 'game' and 'currentUser' which are props/state.
+        const player = game.players.find(p => p.id === currentUser.id) || game.players[0];
+        if (player) {
+            const newGrid = player.grid.map(c => {
+                if (c.song && c.song.id === songId) {
+                    return { ...c, song: { ...c.song, preview: freshUrl } };
+                }
+                return c;
+            });
+            // Optimistic Local Update
+            optimisticallyUpdateGrid(newGrid);
+            // Background DB Update
+            updatePlayerGrid(game.id, currentUser.id, newGrid);
+        }
+    });
 
-    // Wrapper to add haptic click which is specific to ActiveGame UI
-    const toggleAudio = (e, url) => {
-        e.stopPropagation();
+    // Wrapper to add haptic click
+    const toggleAudio = (e, songOrUrl) => {
+        if (e) e.stopPropagation();
         hapticClick();
-        baseToggleAudio(url);
+        hookToggleAudio(e, songOrUrl);
     };
+
+    // Compatibility wrapper for callers sending just URL (like modal closing)
+    const baseToggleAudio = (url) => toggleAudio(null, url);
 
     useEffect(() => {
         const fetchFreshState = async () => {
@@ -312,6 +346,17 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
 
     }, [game.players, currentUser.id]);
 
+    const prevStatusRef = useRef(game.status);
+    useEffect(() => {
+        if (game.status === 'finished' && prevStatusRef.current !== 'finished') {
+            const winners = [...game.players].sort((a, b) => b.score - a.score);
+            const winnerName = winners[0].name;
+            sendNotification("🏆 FIN DE PARTIE !", `Le vainqueur est ${winnerName} !`);
+            hapticSuccess();
+        }
+        prevStatusRef.current = game.status;
+    }, [game.status, game.players]);
+
     useEffect(() => {
         if (!selectedCellId) return;
         // Always fetch favorites when modal opens to ensure hearts are correct in search results
@@ -334,7 +379,8 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
         return () => clearTimeout(delayDebounceFn);
     }, [searchTerm, modalTab, selectedCellId]);
 
-    useEffect(() => { getTrendingSongs().then(setSearchResults); }, []);
+    // Trending songs fetched by the modal effect when needed
+    // useEffect(() => { getTrendingSongs().then(setSearchResults); }, []);
 
 
 
@@ -716,8 +762,10 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
 
 
                     {isHost && game.players.some(p => p.isGridLocked) && (
-                        <button onClick={handleFinishGame} className="w-10 h-10 bg-red-500/20 border border-red-500 text-red-500 rounded-full flex items-center justify-center elastic-active shadow-[0_0_10px_rgba(239,68,68,0.4)]">
-                            🛑
+                        <button onClick={handleFinishGame} className="w-10 h-10 bg-red-500/20 border border-red-500 text-red-500 rounded-full flex items-center justify-center elastic-active">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                                <path fillRule="evenodd" d="M3 6a3 3 0 013-3h10a1 1 0 01.8 1.6L14.25 8l2.55 3.4A1 1 0 0116 13H6a1 1 0 00-1 1v3a1 1 0 11-2 0V6z" clipRule="evenodd" />
+                            </svg>
                         </button>
                     )}
                     <div className="w-10 h-10 rounded-full border-2 border-fuchsia-500 overflow-hidden cursor-pointer elastic-active shadow-[0_0_10px_rgba(217,70,239,0.5)]" onClick={() => { hapticClick(); onNavigateToProfile(); }}>
@@ -737,8 +785,18 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                 tab === 'grid' && !isMyGridLocked && (
                     <div className="px-4 mb-4">
                         <div className="glass-liquid p-1 rounded-xl flex">
-                            <button onClick={() => { setIsMoveMode(false); setMoveSourceIndex(null); hapticClick(); }} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${!isMoveMode ? 'bg-white text-slate-900' : 'text-slate-400'}`}>🎵 {t(lang, 'game.btnAdd')}</button>
-                            <button onClick={() => { setIsMoveMode(true); hapticClick(); }} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${isMoveMode ? 'bg-cyan-400 text-slate-900' : 'text-slate-400'}`}>🔄 {t(lang, 'game.btnReorder')}</button>
+                            <button onClick={() => { setIsMoveMode(false); setMoveSourceIndex(null); hapticClick(); }} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${!isMoveMode ? 'bg-white text-slate-900' : 'text-slate-400'}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                    <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+                                </svg>
+                                {t(lang, 'game.btnAdd')}
+                            </button>
+                            <button onClick={() => { setIsMoveMode(true); hapticClick(); }} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${isMoveMode ? 'bg-cyan-400 text-slate-900' : 'text-slate-400'}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                    <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0v2.433l-.312-.312a7 7 0 00-11.712 3.138.75.75 0 001.449.39 5.5 5.5 0 019.201-2.466l.312.312h-2.433a.75.75 0 000 1.5h4.242a.75.75 0 00.53-.219z" clipRule="evenodd" />
+                                </svg>
+                                {t(lang, 'game.btnReorder')}
+                            </button>
                         </div>
                         {isMoveMode && <p className="text-center text-[10px] text-cyan-300 mt-2 animate-pulse font-bold">Tap a song, then tap another to swap!</p>}
                     </div>
@@ -748,13 +806,17 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
             <div className="flex-1 px-4">
                 {tab === 'grid' && (
                     <div className="animate-pop">
-                        {/* GRID CONTAINER - Fixed Squares & Readability */}
-                        <div className="grid grid-cols-4 gap-3 aspect-square mb-6 select-none">
+                        {/* GRID CONTAINER - Dynamic Grid Size */}
+                        <div
+                            className="grid gap-3 aspect-square mb-6 select-none"
+                            style={{ gridTemplateColumns: `repeat(${Math.sqrt(myPlayer.grid.length) || 4}, 1fr)` }}
+                        >
                             {myPlayer.grid.map((cell, index) => (
                                 <div
                                     key={cell.id}
                                     draggable={game.status === 'lobby'}
                                     onDragStart={(e) => handleDragStart(e, index)}
+                                    // ... check line number alignment below
                                     onDragOver={handleDragOver}
                                     onDrop={(e) => handleDrop(e, index)}
                                     onClick={() => handleCellClick(cell, index)}
@@ -778,7 +840,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                             <div className={`absolute inset-0 bg-black/50 transition-all duration-300 ${cell.marked ? 'bg-fuchsia-600/60 mix-blend-multiply' : ''}`} />
 
                                             {cell.song.preview && !isMoveMode && (
-                                                <div className="absolute top-1 right-1 z-30" onClick={(e) => toggleAudio(e, cell.song.preview)}>
+                                                <div className="absolute top-1 right-1 z-30" onClick={(e) => toggleAudio(e, cell.song)}>
                                                     <div className={`w-6 h-6 rounded-full flex items-center justify-center backdrop-blur-md border shadow-sm transition-all elastic-active ${playingUrl === cell.song.preview ? 'bg-cyan-400 border-cyan-200 animate-pulse' : 'bg-black/60 border-white/20'}`}>
                                                         {playingUrl === cell.song.preview ? <div className="w-2 h-2 bg-white rounded-sm" /> : <span className="text-[10px]">🎵</span>}
                                                     </div>
@@ -864,7 +926,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                     {opponents.map(p => (
                                         <div key={p.id} className={`glass-liquid p-4 rounded-3xl ${p.bingoCount > 0 ? 'border-yellow-400/50 shadow-[0_0_30px_rgba(234,179,8,0.2)]' : ''}`}>
                                             <div className="flex items-center gap-3 mb-4">
-                                                <img src={p.avatar} className="w-10 h-10 rounded-full border-2 border-slate-600 object-cover" alt="avt" />
+                                                <img src={p.avatar} referrerPolicy="no-referrer" className="w-10 h-10 rounded-full border-2 border-slate-600 object-cover" alt="avt" />
                                                 <div className="min-w-0 flex-1">
                                                     <p className="text-sm font-bold text-white">{p.name}</p>
                                                     {p.bingoCount > 0 && <p className="text-[10px] text-yellow-400 font-black animate-bounce uppercase">🏆 {t(lang, 'game.bingo')}</p>}
@@ -872,7 +934,10 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                                 <span className="text-xl font-mono text-fuchsia-400 font-black">{p.score}</span>
                                             </div>
 
-                                            <div className="grid grid-cols-4 gap-2 w-full aspect-square bg-transparent p-0 rounded-2xl select-none">
+                                            <div
+                                                className="grid gap-2 w-full p-2 bg-black/40 backdrop-blur-sm rounded-xl border border-white/5"
+                                                style={{ gridTemplateColumns: `repeat(${Math.sqrt(p.grid.length) || 4}, 1fr)` }}
+                                            >
                                                 {p.grid.map((c, i) => (
                                                     <div
                                                         key={i}
@@ -1013,12 +1078,12 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                         }}></div>
 
                         {/* Modal Content */}
-                        <div className="relative w-full max-w-lg h-[99vh] md:h-[80vh] bg-slate-900/60 backdrop-blur-2xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-t-3xl md:rounded-3xl flex flex-col overflow-hidden animate-slide-up">
+                        <div className="relative w-full max-w-lg h-[92vh] md:h-[80vh] bg-slate-900/95 backdrop-blur-2xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-t-3xl md:rounded-3xl flex flex-col overflow-hidden animate-slide-up pt-safe">
 
-                            {/* Modal Header */}
-                            <div className="p-4 border-b border-white/5 flex items-center gap-3 bg-white/5">
-                                <div className="flex-1 flex bg-black/20 p-1 rounded-xl border border-white/5">
-                                    <button onClick={() => setModalTab('search')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${modalTab === 'search' ? 'bg-cyan-500/80 text-white shadow-lg backdrop-blur-md' : 'text-slate-400 hover:text-white'}`}>
+                            {/* Modal Header - Sticky & Safe Area */}
+                            <div className="p-4 border-b border-white/5 flex items-center gap-3 bg-slate-900/80 backdrop-blur-xl sticky top-0 z-20">
+                                <div className="flex-1 flex bg-black/40 p-1 rounded-xl border border-white/10">
+                                    <button onClick={() => setModalTab('search')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${modalTab === 'search' ? 'bg-cyan-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
                                         🔍 {t(lang, 'game.modalTabSearch')}
                                     </button>
                                     <button
@@ -1062,7 +1127,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
 
                             <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-safe scrollbar-hide">
                                 {displayedSongs.map((song, i) => (
-                                    <div key={song.id} onClick={() => handleSongSelect(song)} className="group flex items-center gap-4 p-3 rounded-2xl hover:bg-white/5 cursor-pointer transition-all border border-transparent hover:border-white/10 animate-pop" style={{ animationDelay: `${i * 0.05}s` }}>
+                                    <div key={`${song.id}-${i}`} onClick={() => handleSongSelect(song)} className="group flex items-center gap-4 p-3 rounded-2xl hover:bg-white/5 cursor-pointer transition-all border border-transparent hover:border-white/10 animate-pop" style={{ animationDelay: `${i * 0.05}s` }}>
 
                                         <div className="relative w-16 h-16 shrink-0">
                                             <img src={song.cover} className="w-full h-full rounded-xl shadow-lg object-cover group-hover:scale-105 transition-transform duration-300" alt="cover" />
@@ -1070,7 +1135,20 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                             {song.preview && (
                                                 <div className="absolute -bottom-2 -right-2 z-20">
                                                     <button
-                                                        onClick={(e) => toggleAudio(e, song.preview)}
+                                                        onClick={async (e) => {
+                                                            e.stopPropagation();
+                                                            if (playingUrl === song.preview) {
+                                                                toggleAudio(e, song.preview);
+                                                            } else {
+                                                                const freshUrl = await refreshSongUrl(song.id);
+                                                                if (freshUrl) {
+                                                                    song.preview = freshUrl; // Opt update
+                                                                    toggleAudio(e, freshUrl);
+                                                                } else {
+                                                                    toggleAudio(e, song.preview);
+                                                                }
+                                                            }
+                                                        }}
                                                         className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg backdrop-blur-md border transition-all ${playingUrl === song.preview ? 'bg-cyan-500 border-cyan-400 text-white animate-pulse' : 'bg-black/60 border-white/20 text-white hover:bg-cyan-500 hover:border-cyan-400'}`}
                                                     >
                                                         {playingUrl === song.preview ? (
@@ -1130,7 +1208,10 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                             onClick={handleNativeShare}
                             className="w-full py-4 bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white font-bold rounded-2xl uppercase tracking-widest hover:brightness-110 transition-all shadow-lg elastic-active flex items-center justify-center gap-2"
                         >
-                            <span>📤</span> {t(lang, 'game.shareInvite')}
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+                                <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
+                            </svg>
+                            {t(lang, 'game.shareInvite')}
                         </button>
                     </div>
                 </div>
@@ -1156,15 +1237,19 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                 <div className="absolute top-[-20%] right-[-20%] w-[80%] h-[80%] opacity-40" style={{ background: 'radial-gradient(circle, rgba(217,70,239,1) 0%, rgba(217,70,239,0) 70%)' }}></div>
                                 <div className="absolute bottom-[-20%] left-[-20%] w-[80%] h-[80%] opacity-40" style={{ background: 'radial-gradient(circle, rgba(6,182,212,1) 0%, rgba(6,182,212,0) 70%)' }}></div>
 
-                                <div className="relative z-10 flex flex-col items-center w-full h-full justify-between py-4">
-                                    <div className="text-center">
+                                <div className="relative z-10 flex flex-col items-center w-full h-full justify-between pt-12 pb-4">
+                                    <div className="text-center w-full">
                                         {/* Fix for html2canvas: Use solid color or text-shadow instead of bg-clip-text */}
-                                        <h1 className="text-3xl font-black text-fuchsia-400 italic drop-shadow-[0_2px_0_rgba(255,255,255,1)]">ChronoBingo</h1>
-                                        <p className="text-white/60 text-xs font-bold uppercase tracking-[0.3em]">Party Game</p>
+                                        {/* pr-2 compensates for italic visual weight. pl-[0.3em] compensates for tracking */}
+                                        <h1 className="text-3xl font-black text-fuchsia-400 italic drop-shadow-[0_2px_0_rgba(255,255,255,1)] pr-2">ChronoBingo</h1>
+                                        <p className="text-white/60 text-xs font-bold uppercase tracking-[0.3em] pl-[0.3em] mt-1">Party Game</p>
                                     </div>
 
                                     {/* Grid - Tilted as requested */}
-                                    <div className="grid grid-cols-4 gap-2 w-full aspect-square bg-black/80 p-2 rounded-2xl border border-white/10 shadow-2xl scale-90 transform rotate-2 my-auto">
+                                    <div
+                                        className="grid gap-2 w-full aspect-square bg-black/80 p-2 rounded-2xl border border-white/10 shadow-2xl scale-90 transform rotate-2 my-auto"
+                                        style={{ gridTemplateColumns: `repeat(${game.settings?.gridSize || 4}, 1fr)` }}
+                                    >
                                         {myPlayer.grid.map((c, i) => (
                                             <div key={i} className={`relative rounded-md overflow-hidden aspect-square ${c.marked ? 'bg-fuchsia-500' : 'bg-white/10'}`}>
                                                 {c.song ? (
@@ -1200,9 +1285,9 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                                     <div className="relative w-10 h-10 mb-1 rounded-full border-2 border-slate-400">
                                                         <img src={game.players.sort((a, b) => b.score - a.score)[1].avatar} className="w-full h-full object-cover rounded-full" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
                                                     </div>
-                                                    <div className="share-name bg-slate-800/80 px-2 py-0.5 rounded text-[8px] font-bold text-white mb-1 truncate max-w-[80px]">{game.players.sort((a, b) => b.score - a.score)[1].name}</div>
+                                                    <div className="share-name bg-slate-800/80 px-2 py-0.5 rounded text-[8px] font-bold text-white mb-1 whitespace-nowrap">{game.players.sort((a, b) => b.score - a.score)[1].name}</div>
                                                     <div className="h-8 w-10 bg-slate-400/40 rounded-t-lg border-t border-x border-slate-400/50 flex items-center justify-center">
-                                                        <span className="text-[10px] font-black text-slate-200">2</span>
+                                                        <span className="text-[10px] font-black text-slate-200">{game.players.sort((a, b) => b.score - a.score)[1].score}</span>
                                                     </div>
                                                 </div>
                                             )}
@@ -1213,7 +1298,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                                         <img src={game.players.sort((a, b) => b.score - a.score)[0].avatar} className="w-full h-full object-cover rounded-full" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
                                                         <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 text-base">👑</div>
                                                     </div>
-                                                    <div className="share-name bg-slate-800/80 px-2 py-0.5 rounded text-[8px] font-bold text-yellow-400 mb-1 truncate max-w-[100px]">{game.players.sort((a, b) => b.score - a.score)[0].name}</div>
+                                                    <div className="share-name bg-slate-800/80 px-2 py-0.5 rounded text-[8px] font-bold text-yellow-400 mb-1 whitespace-nowrap">{game.players.sort((a, b) => b.score - a.score)[0].name}</div>
                                                     <div className="h-12 w-12 bg-yellow-400/40 rounded-t-lg border-t border-x border-yellow-400/50 flex items-center justify-center flex-col">
                                                         <span className="text-xs font-black text-white">{game.players.sort((a, b) => b.score - a.score)[0].score}</span>
                                                         <span className="text-[8px] text-yellow-200 uppercase">pts</span>
@@ -1226,33 +1311,33 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                                     <div className="relative w-10 h-10 mb-1 rounded-full border-2 border-orange-700">
                                                         <img src={game.players.sort((a, b) => b.score - a.score)[2].avatar} className="w-full h-full object-cover rounded-full" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
                                                     </div>
-                                                    <div className="share-name bg-slate-800/80 px-2 py-0.5 rounded text-[8px] font-bold text-white mb-1 truncate max-w-[80px]">{game.players.sort((a, b) => b.score - a.score)[2].name}</div>
+                                                    <div className="share-name bg-slate-800/80 px-2 py-0.5 rounded text-[8px] font-bold text-white mb-1 whitespace-nowrap">{game.players.sort((a, b) => b.score - a.score)[2].name}</div>
                                                     <div className="h-6 w-10 bg-orange-700/40 rounded-t-lg border-t border-x border-orange-700/50 flex items-center justify-center">
-                                                        <span className="text-[10px] font-black text-orange-200">3</span>
+                                                        <span className="text-[10px] font-black text-orange-200">{game.players.sort((a, b) => b.score - a.score)[2].score}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* IF USER NOT IN TOP 3 - SHOW AS 4TH STEP ON RIGHT */}
+                                            {!game.players.sort((a, b) => b.score - a.score).slice(0, 3).some(p => p.id === currentUser.id) && (
+                                                <div className="flex flex-col items-center">
+                                                    <div className="relative w-10 h-10 mb-1 rounded-full border-2 border-fuchsia-500 shadow-[0_0_10px_rgba(217,70,239,0.5)]">
+                                                        <img src={currentUser.avatar} className="w-full h-full object-cover rounded-full" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
+                                                    </div>
+                                                    <div className="share-name bg-slate-800/80 px-2 py-0.5 rounded text-[8px] font-bold text-white mb-1 whitespace-nowrap">{currentUser.name}</div>
+                                                    <div className="h-5 w-10 bg-fuchsia-600/40 rounded-t-lg border-t border-x border-fuchsia-600/50 flex items-center justify-center">
+                                                        <span className="text-[10px] font-black text-fuchsia-200">{myPlayer.score}</span>
                                                     </div>
                                                 </div>
                                             )}
                                         </div>
 
-                                        {/* IF USER NOT IN TOP 3, SHOW THEM BELOW */}
-                                        {!game.players.sort((a, b) => b.score - a.score).slice(0, 3).some(p => p.id === currentUser.id) && (
-                                            <div className="flex flex-col items-center gap-2">
-                                                <div className="flex items-center gap-3 bg-black/40 px-4 py-2 rounded-full border border-white/20">
-                                                    <img src={currentUser.avatar} className="w-10 h-10 rounded-full border-2 border-white" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
-                                                    <div className="min-w-0">
-                                                        <p className="share-name text-white font-bold text-sm truncate max-w-[120px]">{currentUser.name}</p>
-                                                        <p className="text-fuchsia-400 font-black text-xs uppercase">{myPlayer.score} PTS</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
+
                                     </div>
 
                                     {/* FOOTER - MORE ENTICING & LOWER */}
-                                    <div className="mt-auto mb-0 flex flex-col items-center pt-8">
-                                        <div className="bg-fuchsia-600/20 border border-fuchsia-500/50 px-3 py-0.5 rounded-full shadow-[0_0_15px_rgba(217,70,239,0.15)] backdrop-blur-sm">
-                                            <span className="text-white font-bold text-[10px] tracking-wider">chronobingo.com</span>
-                                        </div>
+                                    <div className="mt-auto mb-8 flex flex-col items-center">
+                                        <span className="text-white font-bold text-xs tracking-[0.2em] uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">chronobingo.com</span>
                                     </div>
                                 </div>
                             </div>
@@ -1265,7 +1350,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
                                         <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
                                     </svg>
-                                    Partager en Story
+                                    {t(lang, 'game.shareStory')}
                                 </button>
                             ) : (
                                 <div className="text-white/50 text-sm animate-pulse">Génération de l'image...</div>
@@ -1282,9 +1367,9 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                     <div className="bg-slate-800 border-2 border-indigo-500/50 p-6 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
                         <div className="text-center space-y-1">
                             <h3 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">
-                                🎵 Chanson Détectée !
+                                {t(lang, 'game.detectedTitle')}
                             </h3>
-                            <p className="text-slate-400 text-sm">Est-ce bien ce titre ?</p>
+                            <p className="text-slate-400 text-sm">{t(lang, 'game.detectedQuestion')}</p>
                         </div>
 
                         {detectedMatch.cell.song.cover && (
@@ -1320,18 +1405,18 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                 }}
                                 className="w-full py-3 rounded-xl bg-slate-700/50 text-slate-300 font-bold hover:bg-slate-700 active:scale-95 transition-all"
                             >
-                                Non
+                                {t(lang, 'game.btnNo')}
                             </button>
                             <button
                                 onClick={() => {
                                     hapticSuccess();
                                     togglePlayerCell(game.id, currentUser.id, detectedMatch.cell.id, true);
-                                    sendNotification("Chanson trouvée !", `C'est ${detectedMatch.cell.song.title} !`);
+                                    // Notification removed to reduce spam
                                     setDetectedMatch(null);
                                 }}
                                 className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold shadow-lg shadow-indigo-500/25 active:scale-95 transition-all"
                             >
-                                Oui, valider !
+                                {t(lang, 'game.btnYes')}
                             </button>
                         </div>
                     </div>

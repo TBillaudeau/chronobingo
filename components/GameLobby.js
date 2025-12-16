@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { createGame, joinGame, getGameHistory, getGlobalLeaderboard, logoutUser } from '../services/gameService';
 import { t } from '../services/translations';
 import { hapticClick } from '../services/haptics';
+import { getTrendingSongs } from '../services/music';
+import { useAudioPlayer } from '../hooks/useAudioPlayer';
 
 const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, onRequestLogin }) => {
   const [joinId, setJoinId] = useState('');
@@ -11,37 +13,14 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [noDuplicates, setNoDuplicates] = useState(false);
-  const [playingUrl, setPlayingUrl] = useState(null);
-  const audioRef = React.useRef(null);
+  const [gridSize, setGridSize] = useState(4);
+  const { playingUrl, toggleAudio: hookToggleAudio } = useAudioPlayer((songId, freshUrl) => {
+    setTopSongs(prev => prev.map(s => s.id === songId ? { ...s, preview: freshUrl } : s));
+  });
 
-  const toggleAudio = (url) => {
-    if (!url) return;
-    if (playingUrl === url) {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-      setPlayingUrl(null);
-    } else {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-      const audio = new Audio(url);
-      audio.volume = 0.5;
-      audio.play().catch(e => console.error("Audio play error:", e));
-      audio.onended = () => setPlayingUrl(null);
-      audioRef.current = audio;
-      setPlayingUrl(url);
-    }
+  const toggleAudio = (song) => {
+    hookToggleAudio(song);
   };
-
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-    };
-  }, []);
 
   useEffect(() => {
     getGlobalLeaderboard().then(setTopSongs);
@@ -59,13 +38,13 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
   const handleCreate = async () => {
     hapticClick();
     if (!user) {
-      onRequestLogin({ type: 'create', noDuplicates });
+      onRequestLogin({ type: 'create', noDuplicates, gridSize });
       return;
     }
     setLoading(true);
     try {
       // Always allow late join, no option needed
-      const settings = { noDuplicates, allowLateJoin: true };
+      const settings = { noDuplicates, gridSize };
       const game = await createGame(user, settings);
       onJoinGame(game);
     } catch (e) {
@@ -170,7 +149,7 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
           /* Real User Profile Header */
           <div className="flex items-center gap-4 mb-8 w-full glass-liquid p-4 rounded-3xl cursor-pointer group elastic-active hover:border-fuchsia-500/50 transition-all" onClick={() => { hapticClick(); onNavigateToProfile(); }}>
             <div className="relative">
-              <img src={user.avatar} alt={user.name} className="w-14 h-14 rounded-full border-2 border-fuchsia-500 shadow-[0_0_15px_rgba(217,70,239,0.5)] group-hover:scale-110 transition-transform duration-300" />
+              <img src={user.avatar} referrerPolicy="no-referrer" alt={user.name} className="w-14 h-14 rounded-full border-2 border-fuchsia-500 shadow-[0_0_15px_rgba(217,70,239,0.5)] group-hover:scale-110 transition-transform duration-300" />
               <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 bg-green-500"></div>
             </div>
             <div className="flex-1">
@@ -204,6 +183,7 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
                     <p className="font-black text-white tracking-wider font-mono text-lg group-hover:text-cyan-400 transition-colors">{game.id}</p>
                     <p className="text-xs text-slate-400 uppercase font-bold">
                       {t(lang, 'lobby.host')}: <span className="text-slate-300">{game.hostName}</span> • {formatDate(game.date)} • ({formatTimeAgo(game.date)})
+                      {game.isSaved && <> • <span className="text-yellow-400">💾 SAUVÉE</span></>}
                     </p>
                   </div>
                 </div>
@@ -237,6 +217,22 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
                 <div className="text-left flex-1">
                   <p className={`text-sm font-bold ${noDuplicates ? 'text-white' : 'text-slate-400'}`}>{t(lang, 'lobby.modeNoDuplicates')}</p>
                   <p className="text-[9px] text-slate-500 leading-tight">{t(lang, 'lobby.modeNoDuplicatesDesc')}</p>
+                </div>
+              </div>
+
+              {/* Grid Size Selector */}
+              <div className="w-full mt-4 bg-black/20 rounded-xl p-3">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 text-left ml-1">{t(lang, 'lobby.gridSize')}</p>
+                <div className="flex gap-2">
+                  {[3, 4, 5].map(size => (
+                    <button
+                      key={size}
+                      onClick={() => { setGridSize(size); hapticClick(); }}
+                      className={`flex-1 py-3 rounded-lg font-black text-sm transition-all elastic-active border ${gridSize === size ? 'bg-fuchsia-500 text-white border-fuchsia-400 shadow-[0_0_10px_rgba(217,70,239,0.5)]' : 'bg-transparent text-slate-500 border-white/10 hover:bg-white/5'}`}
+                    >
+                      {size}x{size}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -312,7 +308,7 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
                 {song.preview && (
                   <div className="absolute -bottom-2 -right-2 z-20">
                     <button
-                      onClick={(e) => { e.stopPropagation(); toggleAudio(song.preview); }}
+                      onClick={(e) => { e.stopPropagation(); toggleAudio(song); }}
                       className={`w-6 h-6 rounded-full flex items-center justify-center shadow-lg backdrop-blur-md border transition-all ${playingUrl === song.preview ? 'bg-cyan-500 border-cyan-400 text-white animate-pulse' : 'bg-black/60 border-white/20 text-white hover:bg-cyan-500 hover:border-cyan-400'}`}
                     >
                       {playingUrl === song.preview ? (

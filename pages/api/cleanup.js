@@ -46,10 +46,39 @@ export default async function handler(req, res) {
             if (deleteError) throw deleteError;
         }
 
+
+        // 2. Clean up Guest Profiles (Ghost accounts)
+        // Guests start with "guest-" and if they haven't been updated in 72h, they are gone.
+        const { data: guests, error: guestError } = await supabase
+            .from('profiles')
+            .select('id, updated_at')
+            .ilike('id', 'guest-%');
+
+        if (guestError) console.warn("Guest fetch error:", guestError);
+
+        let deletedGuestsCount = 0;
+        if (guests && guests.length > 0) {
+            const guestsToDelete = guests.filter(g => {
+                // Handle various date formats safely
+                const updated = g.updated_at ? new Date(g.updated_at).getTime() : 0;
+                return updated < cutoffTime;
+            }).map(g => g.id);
+
+            if (guestsToDelete.length > 0) {
+                const { error: deleteGuestError } = await supabase
+                    .from('profiles')
+                    .delete()
+                    .in('id', guestsToDelete);
+
+                if (deleteGuestError) console.error("Guest delete error:", deleteGuestError);
+                else deletedGuestsCount = guestsToDelete.length;
+            }
+        }
+
         res.status(200).json({
             message: 'Cleanup complete',
-            deletedCount: gamesToDelete.length,
-            deletedIds: gamesToDelete
+            deletedGames: gamesToDelete.length,
+            deletedGuests: deletedGuestsCount
         });
 
     } catch (err) {

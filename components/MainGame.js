@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { getLocalUser, joinGame, createGame, getCurrentGameId, saveLocalUser, saveUserToDb } from '../services/gameService';
+import { getLocalUser, joinGame, createGame, getCurrentGameId, saveLocalUser, saveUserToDb, mergeGuestHistory } from '../services/gameService';
 import { getBrowserLanguage } from '../services/translations';
 import { supabase } from '../lib/supabase';
 import StarryBackground from './StarryBackground';
@@ -20,10 +20,31 @@ const MainGame = () => {
   const [view, setView] = useState(VIEW.LOBBY);
   const [user, setUser] = useState(null);
   const [activeGame, setActiveGame] = useState(null);
-  const [lang, setLang] = useState('fr');
+  const [lang, setLang] = useState('fr'); // Function init below
   const [initialGameCode, setInitialGameCode] = useState('');
   const [authLoading, setAuthLoading] = useState(true);
   const [batterySaver, setBatterySaver] = useState(false);
+
+  useEffect(() => {
+    // Init Settings from LocalStorage
+    const storedLang = localStorage.getItem('cb_lang');
+    if (storedLang) setLang(storedLang);
+    else setLang(getBrowserLanguage());
+
+    const storedBattery = localStorage.getItem('cb_battery');
+    if (storedBattery === 'true') setBatterySaver(true);
+  }, []);
+
+  // Persist handlers
+  const handleLangChange = (l) => {
+    setLang(l);
+    localStorage.setItem('cb_lang', l);
+  };
+
+  const handleBatteryChange = (val) => {
+    setBatterySaver(val);
+    localStorage.setItem('cb_battery', val);
+  };
 
   const [pendingAction, setPendingAction] = useState(null);
 
@@ -127,6 +148,12 @@ const MainGame = () => {
     setUser(userData);
     saveLocalUser(userData); // Cache logic
     setAuthLoading(false);
+
+    // Merge Guest History if this is a real user and there is history pending
+    if (!userData.isGuest) {
+      // Logic inside handles empty guest history gracefully
+      await mergeGuestHistory(userData.id);
+    }
 
     // Handle Pending Actions (Create/Join after login)
     if (pendingAction) {
@@ -280,12 +307,40 @@ const MainGame = () => {
           <Profile
             user={user}
             lang={lang}
-            onBack={navigateBackFromProfile}
+            onBack={() => {
+              // If we have an active game, go back to it
+              if (activeGame) {
+                updateUrl(VIEW.GAME_ROOM, activeGame.id);
+                setView(VIEW.GAME_ROOM);
+              } else {
+                updateUrl(VIEW.LOBBY);
+                setView(VIEW.LOBBY);
+              }
+            }}
             onLogout={handleLogout}
-            onLanguageChange={setLang}
-            onRejoinGame={handleRejoinFromProfile}
+            onLanguageChange={handleLangChange}
+            onRejoinGame={async (gameId) => {
+              // Determine if guest or user
+              const userToJoin = user;
+              // Reuse the game load logic directly or just update URL which triggers the join effect?
+              // Better: Explicitly call join
+              try {
+                setAuthLoading(true);
+                const game = await joinGame(gameId, userToJoin.id);
+                if (game) {
+                  setActiveGame(game);
+                  setView(VIEW.GAME_ROOM);
+                  updateUrl(VIEW.GAME_ROOM, game.id);
+                }
+              } catch (e) {
+                console.error("Rejoin failed", e);
+                alert("Impossible de rejoindre la partie (elle est peut-être finie).");
+              } finally {
+                setAuthLoading(false);
+              }
+            }}
             batterySaver={batterySaver}
-            setBatterySaver={setBatterySaver}
+            setBatterySaver={handleBatteryChange}
           />
         )}
       </main>

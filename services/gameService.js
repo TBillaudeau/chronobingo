@@ -148,13 +148,11 @@ const checkAchievements = async (userId, profile) => {
   if (newAchievements.length > 0) {
     const finallist = [...currentAchievements, ...newAchievements];
 
-    // TODO: Enable this after adding 'achievements' (jsonb) column to the 'profiles' table in Supabase.
-    // Currently causing PGRST204 error (column not found).
-    // const { error } = await supabase.from('profiles').update({ achievements: finallist }).eq('id', userId);
+    const { error } = await supabase.from('profiles').update({ achievements: finallist }).eq('id', userId);
 
-    // if (error) {
-    //    console.warn("Failed to update achievements:", error);
-    // }
+    if (error) {
+      console.warn("Failed to update achievements:", error);
+    }
 
     return newAchievements;
   }
@@ -162,7 +160,7 @@ const checkAchievements = async (userId, profile) => {
 };
 
 export const updateUserStats = async (userId, updates) => {
-  if (userId.startsWith('guest-')) return;
+  if (!userId || userId.startsWith('guest-')) return;
 
   // Fetch current stats safely
   const profile = await getUserProfile(userId);
@@ -238,44 +236,25 @@ export const getFavorites = async (userId) => {
 
 // --- 3. Global Song Leaderboard ---
 
-export const incrementSongPlayCount = async (song) => {
-  if (!song || !song.id) return;
+// function removed
 
-  const { data: existing } = await supabase
+export const updateSongPreview = async (songId, newPreviewUrl) => {
+  if (!songId || !newPreviewUrl) return;
+
+  await supabase
     .from('global_songs')
-    .select('play_count, validation_count')
-    .eq('id', song.id.toString())
-    .maybeSingle();
-
-  if (existing) {
-    await supabase
-      .from('global_songs')
-      .update({
-        play_count: (existing.play_count || 0) + 1,
-        last_played_at: new Date()
-      })
-      .eq('id', song.id.toString());
-  } else {
-    await supabase
-      .from('global_songs')
-      .insert({
-        id: song.id.toString(),
-        title: song.title,
-        artist: song.artist,
-        cover: song.cover,
-        preview: song.preview,
-        play_count: 1,
-        validation_count: 0
-      });
-  }
+    .update({ preview: newPreviewUrl })
+    .eq('id', songId.toString());
 };
 
-export const incrementSongValidationCount = async (songId, change = 1) => {
-  if (!songId) return;
+export const incrementSongValidationCount = async (song, change = 1) => {
+  if (!song || !song.id) return;
+  const sId = song.id.toString();
+
   const { data: existing } = await supabase
     .from('global_songs')
     .select('validation_count')
-    .eq('id', songId.toString())
+    .eq('id', sId)
     .maybeSingle();
 
   if (existing) {
@@ -284,7 +263,19 @@ export const incrementSongValidationCount = async (songId, change = 1) => {
     await supabase
       .from('global_songs')
       .update({ validation_count: newCount })
-      .eq('id', songId.toString());
+      .eq('id', sId);
+  } else if (change > 0) {
+    // If doesn't exist AND we are adding valid count, create it.
+    await supabase
+      .from('global_songs')
+      .insert({
+        id: sId,
+        title: song.title,
+        artist: song.artist,
+        cover: song.cover,
+        preview: song.preview,
+        validation_count: change
+      });
   }
 };
 
@@ -293,7 +284,6 @@ export const getGlobalLeaderboard = async () => {
     .from('global_songs')
     .select('*')
     .order('validation_count', { ascending: false })
-    .order('play_count', { ascending: false })
     .limit(10);
 
   if (error) {
@@ -394,9 +384,18 @@ export const toggleSaveGame = async (gameId, shouldSave, userId = null) => {
   let game = await joinGame(gameId, null);
   if (!game) return;
 
-  // Do NOT update global game state for saving. It is personal.
-  // game.isSaved = shouldSave; 
-  // await saveGameState(gameId, game); 
+  // CRITICAL FIX: Update global game state to protect it from cleanup script
+  if (shouldSave) {
+    game.isSaved = true;
+    // Only update the specific field to be safe, but here we save the whole object for simplicity/consistency
+    await saveGameState(gameId, game);
+  } else {
+    // If un-saving, we check if ANYONE else has it saved?
+    // Complex logic omitted for simplicity: If host un-saves, it becomes vulnerable to GC.
+    // Ideally we'd query all profiles, but for now: Last action dictates state.
+    game.isSaved = false;
+    await saveGameState(gameId, game);
+  }
 
   // Update history directly
   if (userId) {
@@ -450,10 +449,58 @@ export const getGameHistory = async (userId) => {
       return stored ? JSON.parse(stored) : [];
     } catch (e) { return []; }
   }
-
   // Real User - getUserProfile guarantees an array return
   const profile = await getUserProfile(userId);
   return profile.history;
+};
+
+// NEW: Merge Guest History into Real User Account
+export const mergeGuestHistory = async (realUserId) => {
+  if (typeof window === 'undefined' || !realUserId) return;
+
+  try {
+    const guestHistoryJSON = localStorage.getItem(GUEST_HISTORY_KEY);
+    if (!guestHistoryJSON) return;
+
+    const guestHistory = JSON.parse(guestHistoryJSON);
+    if (!Array.isArray(guestHistory) || guestHistory.length === 0) return;
+
+    // Fetch real user's profile
+    const realProfile = await getUserProfile(realUserId);
+    let realHistory = realProfile.history || [];
+
+    // Filter duplicates (avoid adding same game ID twice)
+    const newGames = guestHistory.filter(gh => !realHistory.some(rh => rh.id === gh.id));
+
+    if (newGames.length === 0) {
+      localStorage.removeItem(GUEST_HISTORY_KEY);
+      return;
+    }
+
+    // Merge and Sort
+    // We update the userId in the history entry to match the new real user
+    const mergedGames = newGames.map(g => ({ ...g, userId: realUserId }));
+    const combinedHistory = [...mergedGames, ...realHistory].sort((a, b) => b.date - a.date);
+
+    // Update Supabase History
+    const { error } = await supabase.from('profiles').update({
+      history: combinedHistory,
+      updated_at: new Date()
+    }).eq('id', realUserId);
+
+    if (!error) {
+      // Also update stats: Add "games_played" count
+      await updateUserStats(realUserId, { games_played: mergedGames.length });
+
+      // Clear local guest storage
+      localStorage.removeItem(GUEST_HISTORY_KEY);
+      console.log(`Merged ${mergedGames.length} guest games into user profile.`);
+    } else {
+      console.warn("Merge history failed:", error);
+    }
+  } catch (err) {
+    console.error("Error merging guest history:", err);
+  }
 };
 
 // --- 6. Game Logic (Realtime) ---
@@ -479,16 +526,28 @@ export const subscribeToGame = (gameId, onUpdate) => {
 };
 
 export const createGame = async (host, settings = {}) => {
-  const gameId = Math.random().toString(36).substr(2, 6).toUpperCase();
+  if (!host) throw new Error("Host user required");
 
-  // Force allowLateJoin to true always
-  const finalSettings = { ...settings, allowLateJoin: true };
+  // Generate unique 6-char ID
+  let gameId = '';
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ2345789'; // No I, O, 0, 1 to avoid confusion
+  for (let i = 0; i < 6; i++) {
+    gameId += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+
+  // --- VARIABLE GRID SIZE ---
+  const gridSize = settings.gridSize || 4;
+  const totalCells = gridSize * gridSize;
 
   const newGameData = {
     id: gameId,
     hostId: host.id,
+    hostName: host.name,
     status: 'lobby',
-    settings: finalSettings,
+    settings: {
+      noDuplicates: settings.noDuplicates || false,
+      gridSize: gridSize // STORE IT
+    },
     players: [{
       id: host.id,
       name: host.name,
@@ -496,10 +555,9 @@ export const createGame = async (host, settings = {}) => {
       score: 0,
       isReady: false,
       isGridLocked: false,
-      grid: Array(16).fill(null).map((_, i) => ({ id: `cell-${i}`, song: null, marked: false })),
+      grid: Array(totalCells).fill(null).map((_, i) => ({ id: `cell-${i}`, song: null, marked: false })),
       bingoCount: 0
     }],
-    currentSong: null,
     createdAt: Date.now(),
   };
 
@@ -515,11 +573,9 @@ export const createGame = async (host, settings = {}) => {
   await updateUserStats(host.id, { games_played: 1 });
 
   // --- AUTO-CLEANUP TRIGGER (OPPORTUNISTIC) ---
-  // Every time a game is created, there is a 10% chance we trigger the cleanup routine.
+  // Every time a game is created, we trigger the cleanup routine.
   // We do NOT await this, we let it run in the background (fire and forget).
-  if (Math.random() < 0.1) {
-    fetch('/api/cleanup').catch(e => console.warn("Background cleanup trigger failed:", e));
-  }
+  fetch('/api/cleanup').catch(e => console.warn("Background cleanup trigger failed:", e));
 
   return newGameData;
 };
@@ -549,13 +605,16 @@ export const joinGame = async (gameId, user) => {
 
     if (!playerExists) {
       // Late join is always allowed now
+      const gridSize = game.settings?.gridSize || 4;
+      const totalCells = gridSize * gridSize;
+
       game.players.push({
         id: user.id,
         name: user.name,
         avatar: user.avatar,
         score: 0,
         isGridLocked: false,
-        grid: Array(16).fill(null).map((_, i) => ({ id: `cell-${i}`, song: null, marked: false })),
+        grid: Array(totalCells).fill(null).map((_, i) => ({ id: `cell-${i}`, song: null, marked: false })),
         bingoCount: 0
       });
       await saveGameState(cleanId, game);
@@ -604,7 +663,6 @@ export const updatePlayerGrid = async (gameId, playerId, grid, newSong = null) =
     await saveGameState(gameId, game);
 
     if (newSong) {
-      await incrementSongPlayCount(newSong);
       await updateUserStats(playerId, { songs_chosen: 1 });
       await updatePersonalSongStats(playerId, newSong, 'select');
     }
@@ -624,37 +682,53 @@ export const togglePlayerCell = async (gameId, playerId, cellId, newState) => {
 
   let bingoBefore = player.bingoCount || 0;
 
-  if (cell.marked !== newState) {
-    cell.marked = newState;
+  // GLOBAL SYNC: Toggle for ALL players who have this song
+  const targetSongId = cell.song.id;
 
-    // Stats & Leaderboard
-    // Handle validation counts (increment or decrement) based on toggle
-    const valChange = newState ? 1 : -1;
+  game.players.forEach(p => {
+    const matchCell = p.grid.find(c => c.song && c.song.id === targetSongId);
 
-    // 1. Update Personal Stats in Supabase Profile
-    updatePersonalSongStats(player.id, cell.song, 'validate', valChange);
+    if (matchCell) {
+      // Only update if state is different to avoid redundant calc
+      if (matchCell.marked !== newState) {
+        matchCell.marked = newState;
 
-    // 2. Update Global Song Validation Count (if needed, but personal sum covers it)
-    // incrementSongValidationCount currently just +1, let's assume we fix it or leave it if it only tracks 'ever marked'.
-    // User asked "take into account when people check uncheck".
-    incrementSongValidationCount(cell.song.id, valChange);
+        recalculatePlayerScore(p);
 
-
-    recalculatePlayerScore(player);
-
-    if ((player.bingoCount || 0) > bingoBefore) {
-      updateUserStats(player.id, { bingos: 1 });
+        // Track Bingo
+        const newBingoCount = p.bingoCount || 0;
+        // Note: p.bingoCount is updated inside recalculatePlayerScore
+        // We can't easily diff previous state inside this loop without storing it first, 
+        // but strictly speaking, the stats update is minor. 
+        // Let's just update the triggering player's stats below.
+      }
     }
+  });
 
-    await saveGameState(gameId, game);
+  // Stats & Leaderboard (Attributed to the ACTOR only)
+  const valChange = newState ? 1 : -1;
+
+  // 1. Update Personal Stats for the player who clicked
+  updatePersonalSongStats(player.id, cell.song, 'validate', valChange);
+
+  // 2. Update Global Song Validation Count
+  incrementSongValidationCount(cell.song, valChange);
+
+  // 3. Bingo Achievement for ACTOR (simplification: only check actor for achievement trigger)
+  const bingoNow = player.bingoCount || 0;
+  if (bingoNow > bingoBefore) {
+    updateUserStats(player.id, { bingos: 1 });
   }
+
+  await saveGameState(gameId, game);
 };
 
 const recalculatePlayerScore = (player) => {
   let score = 0;
   let lines = 0;
   const grid = player.grid;
-  const size = 4;
+  // Dynamic size detection (fallback to 4 if empty)
+  const size = grid.length > 0 ? Math.sqrt(grid.length) : 4;
 
   // 1. Base Score: 1 point per marked song
   let markedCount = 0;
@@ -685,8 +759,8 @@ const recalculatePlayerScore = (player) => {
     }
   }
 
-  // 3. Full Card Bonus: +50 points (Total 16 cells marked)
-  if (markedCount === 16) {
+  // 3. Full Card Bonus: +50 points (Total available cells marked)
+  if (markedCount === (size * size) && markedCount > 0) {
     score += 50;
   }
 
@@ -698,24 +772,7 @@ const saveGameState = async (gameId, gameData) => {
   await supabase.from('gamestates').update({ data: gameData }).eq('id', gameId);
 };
 
-// Helper for UI animations only (kept for compatibility if needed elsewhere)
-const calculateBingo = (grid) => {
-  let lines = 0;
-  const size = 4;
-  // Rows
-  for (let i = 0; i < size; i++) {
-    if (grid.slice(i * size, (i + 1) * size).every(c => c.marked)) lines++;
-  }
-  // Columns
-  for (let i = 0; i < size; i++) {
-    let colFull = true;
-    for (let j = 0; j < size; j++) {
-      if (!grid[j * size + i].marked) colFull = false;
-    }
-    if (colFull) lines++;
-  }
-  return lines;
-};
+// function removed
 
 // Toggle individual player's grid lock status
 export const togglePlayerGridLock = async (gameId, playerId) => {

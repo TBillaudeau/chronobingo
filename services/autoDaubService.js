@@ -165,7 +165,7 @@ export const trainDatabase = async (songs) => {
 };
 
 // MATCHING: Sliding Window counting exact integer matches
-export const findMatchV2 = async (micBuffer) => {
+export const findMatchV2 = async (micBuffer, ignoredIds = []) => {
     // 1. Get pitch sequence from Mic (6s)
     const micSeq = await extractPitchSequence(micBuffer);
 
@@ -180,11 +180,13 @@ export const findMatchV2 = async (micBuffer) => {
 
     // For each song
     for (const [id, data] of Object.entries(songDatabase)) {
+        // PERFORMANCE: Skip found songs
+        if (ignoredIds.includes(String(id)) || ignoredIds.includes(Number(id))) continue;
         const songSeq = data.sequence;
         if (songSeq.length < SEQ_LEN) continue;
 
         // Slide mic sequence (step 8 for speed with high res)
-        for (let i = 0; i <= songSeq.length - SEQ_LEN; i += 4) {
+        for (let i = 0; i <= songSeq.length - SEQ_LEN; i += 8) {
             let score = 0;
             let frameCount = 0;
             let streak = 0;

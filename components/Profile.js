@@ -7,7 +7,7 @@ import { t } from '../services/translations';
 import { hapticClick } from '../services/haptics';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
 
-import Image from 'next/image';
+
 
 const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame, batterySaver, setBatterySaver }) => {
 
@@ -22,7 +22,21 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame,
     const [searching, setSearching] = useState(false);
     const [notifEnabled, setNotifEnabled] = useState(false);
 
-    const { playingUrl, toggleAudio } = useAudioPlayer();
+    // AUDIO HANDLING
+    const { playingUrl, toggleAudio: hookToggleAudio } = useAudioPlayer((songId, freshUrl) => {
+        const updateList = (list) => list.map(s => s.id === songId ? { ...s, preview: freshUrl } : s);
+        setFavorites(prev => updateList(prev));
+        setSearchResults(prev => updateList(prev));
+    });
+
+    const toggleAudio = (songOrUrl) => {
+        // If passed a URL string, try to find the song object locally to enable robust refreshing
+        let target = songOrUrl;
+        if (typeof songOrUrl === 'string') {
+            target = favorites.find(f => f.preview === songOrUrl) || searchResults.find(s => s.preview === songOrUrl) || songOrUrl;
+        }
+        hookToggleAudio(target);
+    };
 
     useEffect(() => {
         setNotifEnabled(hasNotificationPermission());
@@ -116,7 +130,7 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame,
         <div className="w-full max-w-2xl mx-auto p-4 pt-8 pb-20 min-h-screen flex flex-col animate-pop">
 
             <div className="flex items-center gap-4 mb-8">
-                <button onClick={onBack} className="p-3 rounded-full bg-white/10 hover:bg-white/20 transition-colors backdrop-blur-md border border-white/10 elastic-active">
+                <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors backdrop-blur-md border border-white/10 elastic-active">
                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
                 </button>
                 <h1 className="text-3xl font-black neon-text tracking-wide">{t(lang, 'profile.title')}</h1>
@@ -125,11 +139,12 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame,
             <div className="glass-liquid p-6 rounded-3xl mb-8 border border-fuchsia-500/30">
                 <div className="flex items-center gap-6 mb-6">
                     <div className="relative">
-                        <Image
+                        <img
                             src={user.avatar}
+                            referrerPolicy="no-referrer"
                             width={96}
                             height={96}
-                            className="rounded-full border-4 border-fuchsia-500 shadow-[0_0_20px_rgba(217,70,239,0.4)] object-cover"
+                            className="rounded-full border-4 border-fuchsia-500 shadow-[0_0_20px_rgba(217,70,239,0.4)] object-cover bg-slate-800"
                             alt="Profile"
                         />
                         <div className="absolute bottom-0 right-0 text-2xl">{user.isGuest ? '👻' : '👑'}</div>
@@ -171,7 +186,12 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame,
                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-2">{t(lang, 'profile.topsFlops')}</h3>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="glass-liquid p-4 rounded-2xl bg-emerald-500/5 border-emerald-500/20">
-                            <p className="text-emerald-400 font-black text-sm mb-2">{t(lang, 'profile.tops')}</p>
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                                </div>
+                                <p className="text-emerald-400 font-black text-sm">{t(lang, 'profile.tops')}</p>
+                            </div>
                             {bestSongs.map(s => (
                                 <div key={s.id} className="text-xs mb-1">
                                     <span className="text-white font-bold block truncate">{s.title}</span>
@@ -180,7 +200,12 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame,
                             ))}
                         </div>
                         <div className="glass-liquid p-4 rounded-2xl bg-red-500/5 border-red-500/20">
-                            <p className="text-red-400 font-black text-sm mb-2">{t(lang, 'profile.flops')}</p>
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="w-6 h-6 rounded-full bg-red-500/20 flex items-center justify-center text-red-500">
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" /></svg>
+                                </div>
+                                <p className="text-red-400 font-black text-sm">{t(lang, 'profile.flops')}</p>
+                            </div>
                             {worstSongs.map(s => (
                                 <div key={s.id} className="text-xs mb-1">
                                     <span className="text-white font-bold block truncate">{s.title}</span>
@@ -192,36 +217,40 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame,
                 </div>
             )}
 
-            <div className="flex p-1.5 bg-slate-900/60 backdrop-blur-md rounded-2xl mb-8 border border-white/10">
+            <div className="flex p-1.5 bg-slate-900/60 backdrop-blur-md rounded-2xl mb-8 border border-white/10 gap-1 overflow-x-auto">
                 <button
                     onClick={() => setActiveTab('history')}
-                    className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-xl transition-all elastic-active ${activeTab === 'history' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                    className={`flex-1 min-w-[60px] py-3 rounded-xl transition-all elastic-active flex flex-col items-center justify-center gap-1 ${activeTab === 'history' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
                 >
-                    {t(lang, 'profile.tabHistory')}
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <span className="text-[10px] font-black uppercase tracking-wider hidden sm:block">{t(lang, 'profile.tabHistory')}</span>
                 </button>
 
                 {!user.isGuest && (
                     <>
                         <button
                             onClick={() => setActiveTab('achievements')}
-                            className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-xl transition-all elastic-active ${activeTab === 'achievements' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                            className={`flex-1 min-w-[60px] py-3 rounded-xl transition-all elastic-active flex flex-col items-center justify-center gap-1 ${activeTab === 'achievements' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
                         >
-                            {t(lang, 'lobby.achievements')}
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
+                            <span className="text-[10px] font-black uppercase tracking-wider hidden sm:block">{t(lang, 'lobby.achievements')}</span>
                         </button>
                         <button
                             onClick={() => setActiveTab('favorites')}
-                            className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-xl transition-all elastic-active ${activeTab === 'favorites' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                            className={`flex-1 min-w-[60px] py-3 rounded-xl transition-all elastic-active flex flex-col items-center justify-center gap-1 ${activeTab === 'favorites' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
                         >
-                            {t(lang, 'profile.tabFavs')}
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                            <span className="text-[10px] font-black uppercase tracking-wider hidden sm:block">{t(lang, 'profile.tabFavs')}</span>
                         </button>
                     </>
                 )}
 
                 <button
                     onClick={() => setActiveTab('settings')}
-                    className={`flex-1 py-3 text-xs font-black uppercase tracking-wider rounded-xl transition-all elastic-active ${activeTab === 'settings' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                    className={`flex-1 min-w-[60px] py-3 rounded-xl transition-all elastic-active flex flex-col items-center justify-center gap-1 ${activeTab === 'settings' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
                 >
-                    {t(lang, 'profile.tabSettings')}
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    <span className="text-[10px] font-black uppercase tracking-wider hidden sm:block">{t(lang, 'profile.tabSettings')}</span>
                 </button>
             </div>
 
@@ -360,11 +389,11 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame,
                                     <div key={song.id} className="group flex items-center gap-4 p-3 rounded-2xl hover:bg-white/5 cursor-default transition-all border border-transparent hover:border-white/10 animate-pop" style={{ animationDelay: `${i * 0.05}s` }}>
 
                                         <div className="relative w-16 h-16 shrink-0">
-                                            <Image
+                                            <img
                                                 src={song.cover}
                                                 width={64}
                                                 height={64}
-                                                className="rounded-xl shadow-lg object-cover group-hover:scale-105 transition-transform duration-300"
+                                                className="rounded-xl shadow-lg object-cover group-hover:scale-105 transition-transform duration-300 bg-slate-800"
                                                 alt="cover"
                                             />
 
@@ -411,51 +440,77 @@ const Profile = ({ user, lang, onBack, onLogout, onLanguageChange, onRejoinGame,
                         <div className="glass-liquid p-6 rounded-3xl space-y-6">
                             <div>
                                 <label className="block text-xs font-black text-slate-400 mb-3 uppercase tracking-widest">{t(lang, 'profile.lang')}</label>
-                                <div className="flex gap-3">
+                                <div className="flex bg-black/40 p-1 rounded-2xl border border-white/10">
                                     {['fr', 'en'].map(l => (
                                         <button
                                             key={l}
-                                            onClick={() => onLanguageChange(l)}
-                                            className={`flex-1 py-4 rounded-2xl border-2 font-black text-lg transition-all elastic-active flex items-center justify-center gap-2 ${lang === l ? 'border-fuchsia-500 bg-fuchsia-500/20 text-white shadow-[0_0_15px_rgba(217,70,239,0.3)]' : 'border-slate-700 text-slate-500 hover:border-slate-500'}`}
+                                            onClick={() => { hapticClick(); onLanguageChange(l); }}
+                                            className={`flex-1 py-3 rounded-xl font-black text-sm transition-all elastic-active ${lang === l ? 'bg-fuchsia-500 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}
                                         >
-                                            <span>{l === 'fr' ? '🇫🇷' : '🇬🇧'}</span>
-                                            <span className="text-sm uppercase tracking-widest">{l === 'fr' ? 'Français' : 'English'}</span>
+                                            {l === 'fr' ? 'FRANÇAIS' : 'ENGLISH'}
                                         </button>
                                     ))}
                                 </div>
                             </div>
 
-                            <div>
-                                <label className="block text-xs font-black text-slate-400 mb-3 uppercase tracking-widest">Énergie</label>
+                            <div className="w-full h-px bg-white/5 my-2" />
+
+                            {/* BATTERY SAVER SWITCH */}
+                            <div className="flex items-center justify-between p-2">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${batterySaver ? 'bg-green-500 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-white text-sm">{t(lang, 'lobby.batterySaver')}</p>
+                                        <p className="text-[10px] text-slate-400">{t(lang, 'lobby.batterySaverDesc')}</p>
+                                    </div>
+                                </div>
                                 <button
-                                    onClick={() => {
-                                        hapticClick();
-                                        setBatterySaver(!batterySaver);
-                                    }}
-                                    className={`w-full py-4 rounded-2xl border-2 font-bold text-sm transition-all elastic-active flex items-center justify-center gap-2 ${batterySaver ? 'border-fuchsia-500 bg-black text-white shadow-[0_0_15px_rgba(217,70,239,0.3)]' : 'border-slate-700 text-slate-500 hover:border-slate-500'}`}
+                                    onClick={() => { hapticClick(); setBatterySaver(!batterySaver); }}
+                                    className={`w-12 h-7 rounded-full transition-colors relative ${batterySaver ? 'bg-green-500' : 'bg-slate-700'}`}
                                 >
-                                    <span>{batterySaver ? '🔋 ' + t(lang, 'lobby.batterySaver') : '🪫 ' + t(lang, 'lobby.batterySaver')}</span>
+                                    <div className={`w-5 h-5 bg-white rounded-full shadow-md absolute top-1 transition-transform ${batterySaver ? 'left-6' : 'left-1'}`} />
                                 </button>
-                                <p className="text-[10px] text-slate-600 text-center mt-2 px-2">{t(lang, 'lobby.batterySaverDesc')}</p>
                             </div>
 
-                            <div>
-                                <label className="block text-xs font-black text-slate-400 mb-3 uppercase tracking-widest">Notifications</label>
+                            <div className="w-full h-px bg-white/5 my-2" />
+
+                            {/* NOTIFICATIONS SWITCH */}
+                            <div className="flex items-center justify-between p-2">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${notifEnabled ? 'bg-fuchsia-500 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-white text-sm">{t(lang, 'profile.notifications')}</p>
+                                        <p className="text-[10px] text-slate-400">{notifEnabled ? t(lang, 'profile.notifOn') : t(lang, 'profile.notifOff')}</p>
+                                    </div>
+                                </div>
                                 <button
                                     onClick={async () => {
-                                        const granted = await requestNotificationPermission();
-                                        setNotifEnabled(granted);
-                                        if (granted) hapticClick();
+                                        hapticClick();
+                                        if (notifEnabled) {
+                                            // User wants to disable
+                                            setNotifEnabled(false);
+                                        } else {
+                                            // User wants to enable
+                                            const granted = await requestNotificationPermission();
+                                            setNotifEnabled(granted);
+                                            if (!granted) {
+                                                alert("Veuillez autoriser les notifications dans les paramètres de votre navigateur.");
+                                            }
+                                        }
                                     }}
-                                    className={`w-full py-4 rounded-2xl border-2 font-bold text-sm transition-all elastic-active flex items-center justify-center gap-2 ${notifEnabled ? 'border-green-500 bg-green-500/20 text-white' : 'border-slate-700 text-slate-500 hover:border-slate-500'}`}
+                                    className={`w-12 h-7 rounded-full transition-colors relative ${notifEnabled ? 'bg-fuchsia-500' : 'bg-slate-700'}`}
                                 >
-                                    <span>{notifEnabled ? '🔔 Notifications Actives' : '🔕 Activer les Notifications'}</span>
+                                    <div className={`w-5 h-5 bg-white rounded-full shadow-md absolute top-1 transition-transform ${notifEnabled ? 'left-6' : 'left-1'}`} />
                                 </button>
                             </div>
 
 
                             <div>
-                                <label className="block text-xs font-black text-slate-400 mb-3 uppercase tracking-widest">Credits</label>
+                                <label className="block text-xs font-black text-slate-400 mb-3 uppercase tracking-widest">{t(lang, 'profile.credits')}</label>
                                 <div className="bg-black/20 rounded-2xl p-4 text-xs text-slate-400 space-y-2 font-medium">
                                     <p className="flex items-center gap-2">
                                         <span>🎵</span> Music data provided by <a href="https://www.deezer.com" target="_blank" rel="noopener noreferrer" className="text-white font-bold hover:underline">Deezer</a>

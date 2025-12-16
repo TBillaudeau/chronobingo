@@ -1,5 +1,3 @@
-import { playClickSound, playSuccessSound, playErrorSound } from './sounds';
-
 // Haptics Service for tactile feedback
 
 export const vibrate = (pattern) => {
@@ -15,23 +13,19 @@ export const vibrate = (pattern) => {
 // Use for standard button clicks (subtle tick)
 export const hapticClick = () => {
     vibrate(15);
-    // playClickSound(); // Disabled user preference
 };
 
 // Use for significant actions like dropping an item (stronger tick)
 export const hapticFeedback = () => {
     vibrate(40);
-    // playClickSound(); // Disabled user preference
 };
 
 // Use for success/bingo (pattern)
 export const hapticSuccess = () => {
     vibrate([50, 50, 50, 50, 100]);
-    playSuccessSound();
 };
 
 // Use for errors (buzz)
 export const hapticError = () => {
     vibrate([50, 100, 50]);
-    // playErrorSound(); // Disabled user preference
 };

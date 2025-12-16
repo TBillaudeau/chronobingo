@@ -13,18 +13,22 @@ A real-time multiplayer music bingo game for your parties.
 
 - **Real-time Multiplayer**: Play with friends using unique game codes
 - **Deezer Integration**: Search millions of songs with 30-second previews
+- **Variable Grid Sizes**: Choose between 3x3 (Fast), 4x4 (Classic), or 5x5 (Expert)
+- **Achievements System**: Unlock badges for your victories and milestones
 - **Individual Grid Lock**: Each player locks their grid when ready
 - **Host Powers**: Unlock grids, kick players, save games
 - **Guest & Google Auth**: Play instantly or save your stats
+- **Smart Cleanup**: Automatic cleanup of old games and ghost guests
 - **PWA Ready**: Install as a native app on mobile
 - **Bilingual**: Full support for French and English
+- **Docker Support**: Ready for deployment on platforms like Northflank
 
 ## 🚀 Quick Start
 
 ### 1. Database Setup (Supabase)
 
 1. Create a project on [Supabase](https://supabase.com)
-2. Go to **SQL Editor** and run the following script:
+2. Go to **SQL Editor** and run the following script (or use the provided `SUPABASE_MIGRATION.sql` if updating):
 
 ```sql
 -- 1. Game States Table
@@ -44,6 +48,7 @@ create table profiles (
   settings jsonb default '{}',
   stats jsonb default '{"games_played": 0, "games_won": 0, "songs_chosen": 0, "bingos": 0}',
   song_stats jsonb default '{}',
+  achievements jsonb default '[]',
   updated_at timestamp with time zone default now()
 );
 

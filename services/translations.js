@@ -52,7 +52,8 @@ export const dictionary = {
       badge_10_wins: "Champion",
       badge_10_wins_desc: "10 parties gagnées. La classe.",
       badge_beginner_luck: "Chance du Débutant",
-      badge_beginner_luck_desc: "Une victoire dès tes débuts !"
+      badge_beginner_luck_desc: "Une victoire dès tes débuts !",
+      gridSize: "Taille de la Grille"
     },
     game: {
       statusPlaying: "EN COURS",
@@ -100,7 +101,14 @@ export const dictionary = {
       shareTitle: "Rejoindre",
       shareScan: "Scanne pour rejoindre",
       shareInvite: "Inviter des amis",
-      shareText: "Rejoins ma partie de ChoronoBingo ! Code: "
+      shareText: "Rejoins ma partie de ChoronoBingo ! Code: ",
+      shareStory: "Partager en Story",
+      detectedTitle: "🎵 Chanson Détectée !",
+      detectedQuestion: "Est-ce bien ce titre ?",
+      btnYes: "Oui, valider !",
+      btnNo: "Non",
+      notificationFoundTitle: "Chanson trouvée !",
+      notificationFoundBody: "C'est "
     },
     profile: {
       title: "Mon Profil",
@@ -122,8 +130,8 @@ export const dictionary = {
       statWins: "Victoires",
       statRatio: "Ratio",
       topsFlops: "Mes Tops & Flops",
-      tops: "TOPS 🍀",
-      flops: "FLOPS 💀",
+      tops: "TOPS",
+      flops: "FLOPS",
       winRate: "win",
       quitGuest: "Quitter le mode Invité",
       deleteAccount: "Supprimer mon compte",
@@ -133,7 +141,11 @@ export const dictionary = {
       quitGameConfirm: "Voulez-vous vraiment quitter la partie ?",
       btnSave: "Sauvegarder",
       btnSaved: "Sauvegardée",
-      btnDelete: "Supprimer"
+      btnDelete: "Supprimer",
+      notifications: "Notifications",
+      notifOn: "Alertes activées",
+      notifOff: "Alertes désactivées",
+      credits: "Crédits"
     }
   },
   en: {
@@ -188,7 +200,8 @@ export const dictionary = {
       badge_10_wins: "Champion",
       badge_10_wins_desc: "10 games won. Respect.",
       badge_beginner_luck: "Beginner's Luck",
-      badge_beginner_luck_desc: "A victory right at the start!"
+      badge_beginner_luck_desc: "A victory right at the start!",
+      gridSize: "Grid Size"
     },
     game: {
       statusPlaying: "PLAYING",
@@ -236,7 +249,14 @@ export const dictionary = {
       shareTitle: "Join",
       shareScan: "Scan to join",
       shareInvite: "Invite Friends",
-      shareText: "Join my ChronoBingo party! Code: "
+      shareText: "Join my ChronoBingo party! Code: ",
+      shareStory: "Share to Story",
+      detectedTitle: "🎵 Song Detected!",
+      detectedQuestion: "Is this the right song?",
+      btnYes: "Yes, confirm!",
+      btnNo: "No",
+      notificationFoundTitle: "Song found!",
+      notificationFoundBody: "It's "
     },
     profile: {
       title: "My Profile",
@@ -258,8 +278,8 @@ export const dictionary = {
       statWins: "Wins",
       statRatio: "Ratio",
       topsFlops: "My Tops & Flops",
-      tops: "TOPS 🍀",
-      flops: "FLOPS 💀",
+      tops: "TOPS",
+      flops: "FLOPS",
       winRate: "win",
       quitGuest: "Quit Guest Mode",
       deleteAccount: "Delete my account",
@@ -269,7 +289,11 @@ export const dictionary = {
       quitGameConfirm: "Do you really want to quit the game?",
       btnSave: "Save",
       btnSaved: "Saved",
-      btnDelete: "Delete"
+      btnDelete: "Delete",
+      notifications: "Notifications",
+      notifOn: "Alerts enabled",
+      notifOff: "Alerts disabled",
+      credits: "Credits"
     }
   }
 };

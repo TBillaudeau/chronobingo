@@ -16,43 +16,73 @@ export const searchSongs = async (query) => {
     if (!response.ok) throw new Error('Network error');
 
     const data = await response.json();
+    console.log("Deezer Search Response:", data); // DEBUG: Inspect API result
     if (!data.data) return [];
 
-    return data.data
-      .filter(track => track.preview && track.readable) // Filter unplayable
-      .map((track) => ({
-        id: track.id,
-        title: track.title,
-        artist: track.artist.name,
-        cover: track.album.cover_medium,
-        preview: track.preview
-      }));
+    return data.data.map((track) => ({
+      id: track.id,
+      title: track.title,
+      artist: track.artist.name,
+      cover: track.album.cover_medium,
+      preview: track.preview
+    }));
   } catch (error) {
     console.warn("Deezer search failed, using fallback", error);
     return FALLBACK_SONGS.filter(s => s.title.toLowerCase().includes(query.toLowerCase()));
   }
 };
 
+// Basic in-memory cache
+let trendingCache = null;
+let trendingCacheTime = 0;
+const CACHE_DURATION = 1000 * 60 * 10; // 10 minutes cache
+
 export const getTrendingSongs = async () => {
+  const now = Date.now();
+  if (trendingCache && (now - trendingCacheTime < CACHE_DURATION)) {
+    return trendingCache;
+  }
+
   try {
-    const response = await fetch(`${API_PROXY}?path=/chart/0/tracks&limit=10`);
+    const response = await fetch(`${API_PROXY}?path=/chart/0/tracks&limit=50`);
     if (!response.ok) throw new Error('Network error');
 
     const data = await response.json();
+    console.log("Deezer Trending Response (Fresh):", data);
     if (!data.data) return FALLBACK_SONGS;
 
-    return data.data
-      .filter(track => track.preview && track.readable)
-      .map((track) => ({
-        id: track.id,
-        title: track.title,
-        artist: track.artist.name,
-        cover: track.album.cover_medium,
-        preview: track.preview
-      }));
+    const songs = data.data.map((track) => ({
+      id: track.id,
+      title: track.title,
+      artist: track.artist.name,
+      cover: track.album.cover_medium,
+      preview: track.preview
+    }));
+
+    // Update Cache
+    trendingCache = songs;
+    trendingCacheTime = now;
+
+    return songs;
   } catch (error) {
     console.warn("Trending fetch failed", error);
     return FALLBACK_SONGS;
+  }
+};
+
+export const refreshSongUrl = async (songId) => {
+  if (!songId) return null;
+  try {
+    const response = await fetch(`${API_PROXY}?path=/track/${songId}`);
+    if (!response.ok) throw new Error('Network error');
+    const data = await response.json();
+    if (data && data.preview) {
+      return data.preview;
+    }
+    return null;
+  } catch (error) {
+    console.warn("Failed to refresh song URL:", error);
+    return null;
   }
 };
 

@@ -2,6 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
+html,
 body {
   background-color: #020617;
   color: white;
@@ -11,6 +12,8 @@ body {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   font-family: 'Outfit', sans-serif;
+  height: 100%;
+  /* Ensure full height */
 }
 
 /* Custom Scrollbar */
@@ -166,6 +169,20 @@ body {
   transition: transform 0.1s ease-out;
 }
 
-.hover-bounce:hover {
-  transform: translateY(-2px);
+
+/* --- SAFE AREA UTILITIES --- */
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.h-safe {
+  height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+
+.min-h-safe {
+  min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
 }
