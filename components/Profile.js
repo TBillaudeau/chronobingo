@@ -72,7 +72,11 @@ const Profile = ({
         const loadData = async () => {
             // Load History (Hybrid: Local for guest, DB for user)
             const userHistory = await getGameHistory(user.id);
-            setHistory(userHistory.filter(h => h.userId === user.id));
+            if (Array.isArray(userHistory)) {
+                setHistory(userHistory.filter(h => h.userId === user.id));
+            } else {
+                setHistory([]);
+            }
 
             if (user.isGuest) return;
 

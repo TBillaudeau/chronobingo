@@ -38,5 +38,10 @@ export const sendNotification = (title, body) => {
 
 export const hasNotificationPermission = () => {
     if (typeof window === 'undefined') return false;
-    return Notification.permission === 'granted';
+    try {
+        if (!('Notification' in window)) return false;
+        return Notification.permission === 'granted';
+    } catch (e) {
+        return false;
+    }
 }

@@ -446,7 +446,8 @@ export const getGameHistory = async (userId) => {
     if (typeof window === 'undefined') return [];
     try {
       const stored = localStorage.getItem(GUEST_HISTORY_KEY);
-      return stored ? JSON.parse(stored) : [];
+      const parsed = stored ? JSON.parse(stored) : [];
+      return Array.isArray(parsed) ? parsed : [];
     } catch (e) { return []; }
   }
   // Real User - getUserProfile guarantees an array return

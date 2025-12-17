@@ -825,9 +825,9 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                     };
 
                     // Attempt 1: High quality
-                    // Reduced pixelRatio to 2 to avoid memory crashes on mobile which might be causing the fallback to trigger
+                    // Increased pixelRatio to 3 to compensate for smaller visual size on mobile modal
                     const blob = await toBlob(shareRef.current, {
-                        pixelRatio: 2,
+                        pixelRatio: 3,
                         backgroundColor: '#0f172a',
                         filter: (node) => node.tagName !== 'LINK' && !(node.getAttribute && node.getAttribute('data-broken') === 'true'),
                         fontEmbedCSS: '',
@@ -972,8 +972,8 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
             )}
 
             {/* Header - Floating Capsule matching Lobby 'Bonjour' design */}
-            <header className="flex justify-between items-center sticky top-4 z-40 mb-8 mx-4 p-3 rounded-3xl glass-liquid transition-all">
-                <div className="flex-1 flex justify-start gap-2">
+            <header className="flex justify-between items-center sticky top-4 z-40 mb-8 mx-2 md:mx-4 p-2 md:p-3 rounded-3xl glass-liquid transition-all">
+                <div className="flex-1 flex justify-start gap-1 md:gap-2">
                     <button onClick={() => { hapticClick(); onLeave(); }} className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-white bg-white/5 rounded-full elastic-active">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
                     </button>
@@ -992,8 +992,8 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                 </div>
 
                 <div className="flex flex-col items-center">
-                    <div className="flex items-center gap-3 bg-black/40 backdrop-blur-sm rounded-full pl-5 pr-2 py-1.5 border border-white/10 shadow-lg">
-                        <h1 className="font-black text-xl tracking-[0.2em] font-mono cursor-pointer elastic-active text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]" onClick={copyCode}>
+                    <div className="flex items-center gap-2 md:gap-3 bg-black/40 backdrop-blur-sm rounded-full pl-3 pr-2 md:pl-5 md:pr-2 py-1.5 border border-white/10 shadow-lg">
+                        <h1 className="font-black text-lg md:text-xl tracking-[0.2em] font-mono cursor-pointer elastic-active text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]" onClick={copyCode}>
                             {game.id}
                         </h1>
                         <button onClick={shareLink} className="w-8 h-8 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-full text-slate-300 hover:text-white transition-colors border border-white/5">
@@ -1014,7 +1014,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                 )}
 
                 {/* HOST FINISH BUTTON & TOOLS */}
-                <div className="flex-1 flex justify-end items-center gap-3">
+                <div className="flex-1 flex justify-end items-center gap-1 md:gap-3">
 
 
                     {isHost && game.status !== 'finished' && game.players.some(p => p.isGridLocked) && (
@@ -1639,125 +1639,128 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
             {/* IMAGE SHARE MODAL */}
             {showImageShareModal && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-                    <div className="bg-slate-900 rounded-3xl w-full max-w-sm overflow-hidden flex flex-col relative border border-white/10 shadow-2xl">
-                        <button
-                            onClick={() => { setShowImageShareModal(false); setShareImageBlob(null); }}
-                            className="absolute top-2 right-2 z-20 w-8 h-8 flex items-center justify-center bg-black/50 text-white rounded-full hover:bg-black/70"
-                        >✕</button>
+                    <div className="bg-slate-900 rounded-3xl w-full max-w-sm flex flex-col relative border border-white/10 shadow-2xl max-h-[92dvh]">
+                        <div className="absolute top-2 right-2 z-30">
+                            <button
+                                onClick={() => { setShowImageShareModal(false); setShareImageBlob(null); }}
+                                className="w-8 h-8 flex items-center justify-center bg-black/50 text-white rounded-full hover:bg-black/70 backdrop-blur-md"
+                            >✕</button>
+                        </div>
 
-                        <div className="p-4 flex flex-col items-center">
-                            <h3 className="text-white font-black uppercase tracking-widest mb-4 text-center">Story Preview</h3>
+                        <div className="p-4 flex flex-col items-center overflow-y-auto scrollbar-hide overscroll-contain w-full">
+                            <h3 className="text-white font-black uppercase tracking-widest mb-4 text-center text-sm md:text-base">Story Preview</h3>
 
-                            {/* The Capture Area (Off-screen or visible but styled for capture) */}
-                            <div ref={shareRef} className="aspect-[9/16] w-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6 flex flex-col items-center justify-center relative rounded-2xl overflow-hidden border border-white/10 mb-4 select-none">
-                                {/* Decor */}
-                                {
-                                    /* Decor - Using CSS Gradients instead of filter blur for html2canvas support */
-                                }
-                                <div className="absolute top-[-20%] right-[-20%] w-[80%] h-[80%] opacity-40" style={{ background: 'radial-gradient(circle, rgba(217,70,239,1) 0%, rgba(217,70,239,0) 70%)' }}></div>
-                                <div className="absolute bottom-[-20%] left-[-20%] w-[80%] h-[80%] opacity-40" style={{ background: 'radial-gradient(circle, rgba(6,182,212,1) 0%, rgba(6,182,212,0) 70%)' }}></div>
+                            {/* The Capture Area - Fixed width for consistent layout and fit */}
+                            <div className="w-full flex justify-center mb-4">
+                                <div ref={shareRef} className="aspect-[9/16] w-[300px] shrink-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6 flex flex-col items-center justify-center relative rounded-2xl overflow-hidden border border-white/10 select-none shadow-2xl" style={{ margin: 0 }}>
+                                    {/* Decor */}
+                                    {
+                                        /* Decor - Using CSS Gradients instead of filter blur for html2canvas support */
+                                    }
+                                    <div className="absolute top-[-20%] right-[-20%] w-[80%] h-[80%] opacity-40" style={{ background: 'radial-gradient(circle, rgba(217,70,239,1) 0%, rgba(217,70,239,0) 70%)' }}></div>
+                                    <div className="absolute bottom-[-20%] left-[-20%] w-[80%] h-[80%] opacity-40" style={{ background: 'radial-gradient(circle, rgba(6,182,212,1) 0%, rgba(6,182,212,0) 70%)' }}></div>
 
-                                <div className="relative z-10 flex flex-col items-center w-full h-full justify-between pt-12 pb-4">
-                                    <div className="text-center w-full">
-                                        {/* Fix for html2canvas: Use solid color or text-shadow instead of bg-clip-text */}
-                                        {/* pr-2 compensates for italic visual weight. pl-[0.3em] compensates for tracking */}
-                                        <h1 className="text-3xl font-black text-fuchsia-400 italic drop-shadow-[0_2px_0_rgba(255,255,255,1)] pr-2">ChronoBingo</h1>
-                                        <p className="text-white/60 text-xs font-bold uppercase tracking-[0.3em] pl-[0.3em] mt-1">Party Game</p>
-                                    </div>
+                                    <div className="relative z-10 flex flex-col items-center w-full h-full justify-between pt-8 pb-4">
+                                        <div className="text-center w-full">
+                                            {/* Fix for html2canvas: Use solid color or text-shadow instead of bg-clip-text */}
+                                            {/* pr-2 compensates for italic visual weight. pl-[0.3em] compensates for tracking */}
+                                            <h1 className="text-3xl font-black text-fuchsia-400 italic drop-shadow-[0_2px_0_rgba(255,255,255,1)] pr-2">ChronoBingo</h1>
+                                            <p className="text-white/60 text-[10px] font-bold uppercase tracking-[0.3em] pl-[0.3em] mt-1">Party Game</p>
+                                        </div>
 
-                                    {/* Grid - Tilted as requested */}
-                                    <div
-                                        className="grid gap-2 w-full aspect-square bg-black/80 p-2 rounded-2xl border border-white/10 shadow-2xl scale-90 transform rotate-2 my-auto"
-                                        style={{ gridTemplateColumns: `repeat(${game.settings?.gridSize || 4}, 1fr)` }}
-                                    >
-                                        {myPlayer.grid.map((c, i) => (
-                                            <div key={i} className={`relative rounded-md overflow-hidden aspect-square ${c.marked ? 'bg-fuchsia-500' : 'bg-white/10'}`}>
-                                                {c.song ? (
-                                                    <>
-                                                        {/* HTML2Canvas dislikes mix-blend-mode and filters. We use simple opacity layers instead. */}
-                                                        <img src={c.song.cover} className="absolute inset-0 w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
+                                        {/* Grid - Tilted as requested */}
+                                        <div
+                                            className="grid gap-1.5 w-full aspect-square bg-black/80 p-2 rounded-xl border border-white/10 shadow-2xl scale-90 transform rotate-2 my-auto"
+                                            style={{ gridTemplateColumns: `repeat(${game.settings?.gridSize || 4}, 1fr)` }}
+                                        >
+                                            {myPlayer.grid.map((c, i) => (
+                                                <div key={i} className={`relative rounded overflow-hidden aspect-square ${c.marked ? 'bg-fuchsia-500' : 'bg-white/10'}`}>
+                                                    {c.song ? (
+                                                        <>
+                                                            {/* HTML2Canvas dislikes mix-blend-mode and filters. We use simple opacity layers instead. */}
+                                                            <img src={c.song.cover} className="absolute inset-0 w-full h-full object-cover" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
 
-                                                        {/* Unmarked: Darken it significantly */}
-                                                        {!c.marked && <div className="absolute inset-0 bg-slate-900/60"></div>}
+                                                            {/* Unmarked: Darken it significantly */}
+                                                            {!c.marked && <div className="absolute inset-0 bg-slate-900/60"></div>}
 
-                                                        {/* Marked: Add a colorful tint (without mix-blend-mode) */}
-                                                        {c.marked && <div className="absolute inset-0 bg-fuchsia-500/20"></div>}
-                                                    </>
-                                                ) : <div className="w-full h-full flex items-center justify-center text-[10px] opacity-20">🎵</div>}
+                                                            {/* Marked: Add a colorful tint (without mix-blend-mode) */}
+                                                            {c.marked && <div className="absolute inset-0 bg-fuchsia-500/20"></div>}
+                                                        </>
+                                                    ) : <div className="w-full h-full flex items-center justify-center text-[8px] opacity-20">🎵</div>}
 
-                                                {c.marked && (
-                                                    <div className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center border border-white shadow-sm z-10">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 text-white">
-                                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                                        </svg>
+                                                    {c.marked && (
+                                                        <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-green-500 rounded-full flex items-center justify-center border border-white shadow-sm z-10">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-2 h-2 text-white">
+                                                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                            </svg>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div className="w-full px-2 mt-2">
+                                            {/* PODIUM LOGIC */}
+                                            <div className="flex items-end justify-center gap-2 mb-1">
+                                                {/* Rank 2 */}
+                                                {game.players.sort((a, b) => b.score - a.score)[1] && (
+                                                    <div className="flex flex-col items-center">
+                                                        <div className="relative w-8 h-8 mb-1 rounded-full border border-slate-400">
+                                                            <img src={game.players.sort((a, b) => b.score - a.score)[1].avatar} className="w-full h-full object-cover rounded-full" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
+                                                        </div>
+                                                        <div className="share-name bg-slate-800/80 px-1.5 py-0.5 rounded text-[6px] font-bold text-white mb-0.5 whitespace-nowrap">{game.players.sort((a, b) => b.score - a.score)[1].name}</div>
+                                                        <div className="h-6 w-8 bg-slate-400/40 rounded-t-md border-t border-x border-slate-400/50 flex items-center justify-center">
+                                                            <span className="text-[8px] font-black text-slate-200">{game.players.sort((a, b) => b.score - a.score)[1].score}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {/* Rank 1 */}
+                                                {game.players.sort((a, b) => b.score - a.score)[0] && (
+                                                    <div className="flex flex-col items-center z-10">
+                                                        <div className="relative w-10 h-10 mb-1 rounded-full border-2 border-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.5)]">
+                                                            <img src={game.players.sort((a, b) => b.score - a.score)[0].avatar} className="w-full h-full object-cover rounded-full" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
+                                                            <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 text-xs">👑</div>
+                                                        </div>
+                                                        <div className="share-name bg-slate-800/80 px-2 py-0.5 rounded text-[7px] font-bold text-yellow-400 mb-0.5 whitespace-nowrap">{game.players.sort((a, b) => b.score - a.score)[0].name}</div>
+                                                        <div className="h-8 w-10 bg-yellow-400/40 rounded-t-md border-t border-x border-yellow-400/50 flex items-center justify-center flex-col">
+                                                            <span className="text-[10px] font-black text-white">{game.players.sort((a, b) => b.score - a.score)[0].score}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {/* Rank 3 */}
+                                                {game.players.sort((a, b) => b.score - a.score)[2] && (
+                                                    <div className="flex flex-col items-center">
+                                                        <div className="relative w-8 h-8 mb-1 rounded-full border border-orange-700">
+                                                            <img src={game.players.sort((a, b) => b.score - a.score)[2].avatar} className="w-full h-full object-cover rounded-full" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
+                                                        </div>
+                                                        <div className="share-name bg-slate-800/80 px-1.5 py-0.5 rounded text-[6px] font-bold text-white mb-0.5 whitespace-nowrap">{game.players.sort((a, b) => b.score - a.score)[2].name}</div>
+                                                        <div className="h-4 w-8 bg-orange-700/40 rounded-t-md border-t border-x border-orange-700/50 flex items-center justify-center">
+                                                            <span className="text-[8px] font-black text-orange-200">{game.players.sort((a, b) => b.score - a.score)[2].score}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* IF USER NOT IN TOP 3 - SHOW AS 4TH STEP ON RIGHT */}
+                                                {!game.players.sort((a, b) => b.score - a.score).slice(0, 3).some(p => p.id === currentUser.id) && (
+                                                    <div className="flex flex-col items-center">
+                                                        <div className="relative w-8 h-8 mb-1 rounded-full border border-fuchsia-500 shadow-[0_0_10px_rgba(217,70,239,0.5)]">
+                                                            <img src={currentUser.avatar} className="w-full h-full object-cover rounded-full" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
+                                                        </div>
+                                                        <div className="share-name bg-slate-800/80 px-1.5 py-0.5 rounded text-[6px] font-bold text-white mb-0.5 whitespace-nowrap">{currentUser.name}</div>
+                                                        <div className="h-4 w-8 bg-fuchsia-600/40 rounded-t-md border-t border-x border-fuchsia-600/50 flex items-center justify-center">
+                                                            <span className="text-[8px] font-black text-fuchsia-200">{myPlayer.score}</span>
+                                                        </div>
                                                     </div>
                                                 )}
                                             </div>
-                                        ))}
-                                    </div>
 
-                                    <div className="w-full px-2 mt-2">
-                                        {/* PODIUM LOGIC */}
-                                        <div className="flex items-end justify-center gap-3 mb-2">
-                                            {/* Rank 2 */}
-                                            {game.players.sort((a, b) => b.score - a.score)[1] && (
-                                                <div className="flex flex-col items-center">
-                                                    <div className="relative w-10 h-10 mb-1 rounded-full border-2 border-slate-400">
-                                                        <img src={game.players.sort((a, b) => b.score - a.score)[1].avatar} className="w-full h-full object-cover rounded-full" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
-                                                    </div>
-                                                    <div className="share-name bg-slate-800/80 px-2 py-0.5 rounded text-[8px] font-bold text-white mb-1 whitespace-nowrap">{game.players.sort((a, b) => b.score - a.score)[1].name}</div>
-                                                    <div className="h-8 w-10 bg-slate-400/40 rounded-t-lg border-t border-x border-slate-400/50 flex items-center justify-center">
-                                                        <span className="text-[10px] font-black text-slate-200">{game.players.sort((a, b) => b.score - a.score)[1].score}</span>
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {/* Rank 1 */}
-                                            {game.players.sort((a, b) => b.score - a.score)[0] && (
-                                                <div className="flex flex-col items-center z-10">
-                                                    <div className="relative w-14 h-14 mb-1 rounded-full border-2 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)]">
-                                                        <img src={game.players.sort((a, b) => b.score - a.score)[0].avatar} className="w-full h-full object-cover rounded-full" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
-                                                        <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 text-base">👑</div>
-                                                    </div>
-                                                    <div className="share-name bg-slate-800/80 px-2 py-0.5 rounded text-[8px] font-bold text-yellow-400 mb-1 whitespace-nowrap">{game.players.sort((a, b) => b.score - a.score)[0].name}</div>
-                                                    <div className="h-12 w-12 bg-yellow-400/40 rounded-t-lg border-t border-x border-yellow-400/50 flex items-center justify-center flex-col">
-                                                        <span className="text-xs font-black text-white">{game.players.sort((a, b) => b.score - a.score)[0].score}</span>
-                                                        <span className="text-[8px] text-yellow-200 uppercase">pts</span>
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {/* Rank 3 */}
-                                            {game.players.sort((a, b) => b.score - a.score)[2] && (
-                                                <div className="flex flex-col items-center">
-                                                    <div className="relative w-10 h-10 mb-1 rounded-full border-2 border-orange-700">
-                                                        <img src={game.players.sort((a, b) => b.score - a.score)[2].avatar} className="w-full h-full object-cover rounded-full" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
-                                                    </div>
-                                                    <div className="share-name bg-slate-800/80 px-2 py-0.5 rounded text-[8px] font-bold text-white mb-1 whitespace-nowrap">{game.players.sort((a, b) => b.score - a.score)[2].name}</div>
-                                                    <div className="h-6 w-10 bg-orange-700/40 rounded-t-lg border-t border-x border-orange-700/50 flex items-center justify-center">
-                                                        <span className="text-[10px] font-black text-orange-200">{game.players.sort((a, b) => b.score - a.score)[2].score}</span>
-                                                    </div>
-                                                </div>
-                                            )}
 
-                                            {/* IF USER NOT IN TOP 3 - SHOW AS 4TH STEP ON RIGHT */}
-                                            {!game.players.sort((a, b) => b.score - a.score).slice(0, 3).some(p => p.id === currentUser.id) && (
-                                                <div className="flex flex-col items-center">
-                                                    <div className="relative w-10 h-10 mb-1 rounded-full border-2 border-fuchsia-500 shadow-[0_0_10px_rgba(217,70,239,0.5)]">
-                                                        <img src={currentUser.avatar} className="w-full h-full object-cover rounded-full" crossOrigin="anonymous" referrerPolicy="no-referrer" alt="" onError={(e) => { e.target.style.opacity = 0; e.target.setAttribute('data-broken', 'true'); }} />
-                                                    </div>
-                                                    <div className="share-name bg-slate-800/80 px-2 py-0.5 rounded text-[8px] font-bold text-white mb-1 whitespace-nowrap">{currentUser.name}</div>
-                                                    <div className="h-5 w-10 bg-fuchsia-600/40 rounded-t-lg border-t border-x border-fuchsia-600/50 flex items-center justify-center">
-                                                        <span className="text-[10px] font-black text-fuchsia-200">{myPlayer.score}</span>
-                                                    </div>
-                                                </div>
-                                            )}
                                         </div>
 
-
-                                    </div>
-
-                                    {/* FOOTER - MORE ENTICING & LOWER */}
-                                    <div className="mt-auto mb-8 flex flex-col items-center">
-                                        <span className="text-white font-bold text-xs tracking-[0.2em] uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">chronobingo.com</span>
+                                        {/* FOOTER - MORE ENTICING & LOWER */}
+                                        <div className="mt-auto flex flex-col items-center">
+                                            <span className="text-white font-bold text-[8px] tracking-[0.2em] uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">chronobingo.com</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1765,7 +1768,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                             {shareImageBlob ? (
                                 <button
                                     onClick={shareGeneratedImage}
-                                    className="w-full py-4 bg-fuchsia-600 text-white font-black rounded-xl shadow-lg hover:bg-fuchsia-500 transition-all flex items-center justify-center gap-2"
+                                    className="w-full py-4 bg-fuchsia-600 text-white font-black rounded-xl shadow-lg hover:bg-fuchsia-500 transition-all flex items-center justify-center gap-2 shrink-0"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
                                         <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
@@ -1773,7 +1776,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                     {t(lang, 'game.shareStory')}
                                 </button>
                             ) : (
-                                <div className="text-white/50 text-sm animate-pulse">Génération de l'image...</div>
+                                <div className="text-white/50 text-sm animate-pulse my-2">Génération...</div>
                             )}
 
                         </div>
@@ -1781,8 +1784,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                 </div>
             )}
 
-            {/* MATCH DETECTED POPUP */}
-            {detectedMatch && (
+            {/* MATCH DETECTED POPUP */}            {detectedMatch && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-slate-800 border-2 border-indigo-500/50 p-6 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
                         <div className="text-center space-y-1">
