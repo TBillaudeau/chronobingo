@@ -48,7 +48,9 @@ export const saveUserToDb = async (user) => {
 
   saveLocalUser(user);
 
-  // Guest logic is ephemeral, but we store basic info for multiplayer consistency
+  // Guest users are ephemeral and should NOT be stored in the permanent profiles table
+  if (user.isGuest || user.id.startsWith('guest-')) return;
+
   const { error } = await supabase
     .from('profiles')
     .upsert({

@@ -226,12 +226,13 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
                   </div>
                 </div>
 
+                {/* 
                 <div
                   // DISABLED: onClick={() => { setJokersEnabled(!jokersEnabled); hapticClick(); }}
                   className={`relative w-full p-3 rounded-xl flex items-center gap-3 cursor-not-allowed transition-all border mt-2 opacity-50 grayscale bg-black/20 border-white/5`}
                 >
                   <div className={`w-6 h-6 rounded-md flex items-center justify-center bg-slate-700 text-slate-400`}>
-                    {/* Checkmark removed since disabled */}
+                   
                   </div>
                   <div className="text-left flex-1">
                     <p className={`text-sm font-bold text-slate-400`}>{t(lang, 'lobby.modeJokers')}</p>
@@ -242,12 +243,12 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
                   </span>
                 </div>
 
-                {/* MODE TEAM (Disabled / SOON) */}
+                
                 <div
                   className={`relative w-full p-3 rounded-xl flex items-center gap-3 cursor-not-allowed transition-all border mt-2 opacity-50 grayscale bg-black/20 border-white/5`}
                 >
                   <div className={`w-6 h-6 rounded-md flex items-center justify-center bg-slate-700 text-slate-400`}>
-                    {/* Checkmark removed since disabled */}
+                   
                   </div>
                   <div className="text-left flex-1">
                     <p className={`text-sm font-bold text-slate-400`}>{t(lang, 'lobby.modeTeam')}</p>
@@ -257,6 +258,7 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
                     SOON
                   </span>
                 </div>
+                 */}
 
                 {/* Grid Size Selector */}
                 <div className="w-full mt-3 bg-black/20 rounded-xl p-2 flex items-center justify-between gap-3">
