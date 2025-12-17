@@ -134,10 +134,14 @@ const Login = ({ lang, onLogin, initialCode }) => {
         <p>Music data provided by <a href="https://www.deezer.com" target="_blank" rel="noopener noreferrer" className="font-bold text-slate-400 hover:text-slate-300 transition-colors">Deezer</a></p>
         <p>Avatars by <a href="https://dicebear.com" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">DiceBear</a> (CC BY 4.0)</p>
         <p className="mt-2 text-[9px] opacity-70">
-          {lang === 'fr' ? "Tes données (email, nom, avatar) sont utilisées uniquement pour l'identification et le jeu." : "Your data (email, name, avatar) is used solely for authentication and gameplay."}
+          {lang === 'fr' ? "Tes données (ID, prénom, avatar) sont utilisées uniquement pour l'identification et le jeu." : "Your data (ID, first name, avatar) is used solely for authentication and gameplay."}
           <span className="mx-1">•</span>
           <a href="/privacy" className="underline hover:text-slate-300 transition-colors">
             {lang === 'fr' ? "Politique de Confidentialité" : "Privacy Policy"}
+          </a>
+          <span className="mx-1">•</span>
+          <a href="/why-google" className="underline hover:text-slate-300 transition-colors">
+            {t(lang, 'login.whyGoogle')}
           </a>
         </p>
       </div>

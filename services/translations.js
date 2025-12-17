@@ -10,7 +10,10 @@ export const dictionary = {
       btnGuest: "Entrer en Invité",
       btnJoin: "Rejoindre la partie",
       or: "OU",
-      btnGoogle: "Compte Google"
+      btnJoin: "Rejoindre la partie",
+      or: "OU",
+      btnGoogle: "Compte Google",
+      whyGoogle: "Pourquoi ce choix ?"
     },
     lobby: {
       hello: "Bonjour",
@@ -34,6 +37,10 @@ export const dictionary = {
       host: "DJ",
       modeNoDuplicates: "Mode Sans Doublons",
       modeNoDuplicatesDesc: "Une chanson ne peut être choisie que par un seul joueur.",
+      modeJokers: "Activer les Jokers",
+      modeJokersDesc: "Ajoute du piment avec des Jokers aléatoires.",
+      modeTeam: "Mode Équipe",
+      modeTeamDesc: "Jouez en co-op (2v2, 3v3...)",
       modeLateJoin: "Autoriser les retardataires",
       modeLateJoinDesc: "Les joueurs peuvent rejoindre après le début.",
       btnJoin: "Rejoindre",
@@ -43,7 +50,11 @@ export const dictionary = {
       guestModeDesc: "Connecte-toi pour faire +",
       guestLogin: "CONNEXION",
       guestSettings: "Paramètres",
-      batterySaver: "Mode Éco (OLED)",
+      theme: "Thème",
+      themeDefault: "Système",
+      themeDark: "Dark Mode",
+      themeEco: "Mode Éco (N&B)",
+      themeDesc: "Choisis ton style.",
       batterySaverDesc: "Désactive les animations, fond noir pur.",
       installApp: "Installer l'app",
       achievements: "Succès",
@@ -108,7 +119,12 @@ export const dictionary = {
       btnYes: "Oui, valider !",
       btnNo: "Non",
       notificationFoundTitle: "Chanson trouvée !",
-      notificationFoundBody: "C'est "
+      notificationFoundTitle: "Chanson trouvée !",
+      notificationFoundBody: "C'est ",
+      batteryWarning: "⚠️ Attention : L'écoute automatique consomme plus de batterie. Utilise-la avec modération !",
+      batteryBanner: "⚠️ Attention : L'écoute automatique peut vider votre batterie rapidement.",
+      saveGame: "Enregistrer la partie",
+      shareStory: "Partager en Story"
     },
     profile: {
       title: "Mon Profil",
@@ -145,7 +161,53 @@ export const dictionary = {
       notifications: "Notifications",
       notifOn: "Alertes activées",
       notifOff: "Alertes désactivées",
-      credits: "Crédits"
+      notifOn: "Alertes activées",
+      notifOff: "Alertes désactivées",
+      credits: "Crédits",
+      musicBy: "Données musicales par",
+      avatarsBy: "Avatars par",
+      github: "Code source sur"
+    },
+    install: {
+      title: "Installe ChronoBingo",
+      desc: "Ajoute l'app sur ton écran d'accueil pour une meilleure expérience (plein écran, pas de barres).",
+      step1: "Appuie sur",
+      step2: "puis \"Sur l'écran d'accueil\""
+    },
+    tutorial: {
+      title: "Comment jouer ?",
+      step1_title: "Ta Grille",
+      step1_desc: "C'est ta carte de Bingo. Clique sur une case pour ajouter tes titres préférés.",
+      step2_title: "Écoute",
+      step2_desc: "Quand la musique démarre, tends l'oreille ! Si tu l'as sur ta grille, clique dessus pour la cocher.",
+      step3_title: "Auto-Daub",
+      step3_desc: "Active le micro 🎙️ et l'IA reconnaîtra les musiques pour toi ! (Expérimental)",
+      step4_title: "BINGO !",
+      step4_desc: "Complète une ligne ou une colonne pour crier BINGO et marquer des points !",
+      btnNext: "Suivant",
+      btnPrev: "Précédent",
+      btnClose: "C'est parti !"
+    },
+    jokers: {
+      frozen: "GELÉ",
+      frozenDesc: "Vous ne pouvez plus cocher de cases !",
+      blinded: "AVEUGLE",
+      blindedDesc: "Les titres sont cachés. Devinez à l'oreille !",
+      protected: "BUNKER",
+      protectedDesc: "Vous êtes immunisé contre toutes les attaques.",
+      // Joker Roulette Descs
+      wildcard: "Coche une case au choix (Auto)",
+      remix: "Mélange ta grille",
+      cryo: "Gèle le 1er (3min)",
+      hotpotato: "Échange une case hasard",
+      vampire: "Vole 10pts au voisin",
+      zombie: "Infecte une case adverse",
+      eclipse: "Cache titres adverses (30min)",
+      bunker: "Protection totale (15min)",
+      casino: "50% +50pts / 50% 0pts",
+      kamikaze: "+3 cases mais Gelé 1h",
+      incognito: "Score caché (30min)",
+      unicorn: "Valide 1 LIGNE (Rare !)",
     }
   },
   en: {
@@ -158,7 +220,10 @@ export const dictionary = {
       btnGuest: "Enter as Guest",
       btnJoin: "Join Game",
       or: "OR",
-      btnGoogle: "Google Account"
+      btnJoin: "Join Game",
+      or: "OR",
+      btnGoogle: "Google Account",
+      whyGoogle: "Why this choice?"
     },
     lobby: {
       hello: "Hello",
@@ -182,6 +247,10 @@ export const dictionary = {
       host: "DJ",
       modeNoDuplicates: "No Duplicates Mode",
       modeNoDuplicatesDesc: "A song can only be picked by one player.",
+      modeJokers: "Enable Jokers",
+      modeJokersDesc: "Spice up the game with random Jokers.",
+      modeTeam: "Team Mode",
+      modeTeamDesc: "Play in co-op (2v2, 3v3...)",
       modeLateJoin: "Allow Late Joiners",
       modeLateJoinDesc: "Players can join after the game has started.",
       btnJoin: "Join",
@@ -191,7 +260,11 @@ export const dictionary = {
       guestModeDesc: "Log in to do more",
       guestLogin: "LOGIN",
       guestSettings: "Settings",
-      batterySaver: "Eco Mode (OLED)",
+      theme: "Theme",
+      themeDefault: "System",
+      themeDark: "Dark Mode",
+      themeEco: "Eco Mode (B&W)",
+      themeDesc: "Choose your style.",
       batterySaverDesc: "Disables animations, pure black background.",
       installApp: "Install App",
       achievements: "Achievements",
@@ -256,7 +329,12 @@ export const dictionary = {
       btnYes: "Yes, confirm!",
       btnNo: "No",
       notificationFoundTitle: "Song found!",
-      notificationFoundBody: "It's "
+      notificationFoundTitle: "Song found!",
+      notificationFoundBody: "It's ",
+      batteryWarning: "⚠️ Warning: Auto-listening consumes more battery. Use it wisely!",
+      batteryBanner: "⚠️ Warning: Auto-listening can drain your battery quickly.",
+      saveGame: "Save Game",
+      shareStory: "Share to Story"
     },
     profile: {
       title: "My Profile",
@@ -293,7 +371,53 @@ export const dictionary = {
       notifications: "Notifications",
       notifOn: "Alerts enabled",
       notifOff: "Alerts disabled",
-      credits: "Credits"
+      notifOn: "Alerts enabled",
+      notifOff: "Alerts disabled",
+      credits: "Credits",
+      musicBy: "Music data provided by",
+      avatarsBy: "Avatars by",
+      github: "Source code on"
+    },
+    install: {
+      title: "Install ChronoBingo",
+      desc: "Add the app to your home screen for a better experience (fullscreen, no bars).",
+      step1: "Tap on",
+      step2: "then \"Add to Home Screen\""
+    },
+    tutorial: {
+      title: "How to play?",
+      step1_title: "Your Grid",
+      step1_desc: "This is your Bingo card. Click on a cell to add your favorite tracks.",
+      step2_title: "Listen",
+      step2_desc: "When the music starts, listen closely! If you have it on your grid, click to mark it.",
+      step3_title: "Auto-Daub",
+      step3_desc: "Enable the mic 🎙️ and the AI will recognize songs for you! (Experimental)",
+      step4_title: "BINGO!",
+      step4_desc: "Complete a row or column to shout BINGO and score points!",
+      btnNext: "Next",
+      btnPrev: "Previous",
+      btnClose: "Let's go!"
+    },
+    jokers: {
+      frozen: "FROZEN",
+      frozenDesc: "You can't check any cells!",
+      blinded: "BLINDED",
+      blindedDesc: "Titles are hidden. Use your ears!",
+      protected: "BUNKER",
+      protectedDesc: "You are immune to all attacks.",
+      // Joker Roulette Descs
+      wildcard: "Checks a random cell (Auto)",
+      remix: "Shuffles your grid",
+      cryo: "Freezes leader (3min)",
+      hotpotato: "Swaps a random cell",
+      vampire: "Steals 10pts from neighbor",
+      zombie: "Infects opponent cell",
+      eclipse: "Hides opponent titles (30min)",
+      bunker: "Total protection (15min)",
+      casino: "50% +50pts / 50% 0pts",
+      kamikaze: "+3 cells but Frozen 1h",
+      incognito: "Hidden score (30min)",
+      unicorn: "Completes 1 ROW (Rare!)",
     }
   }
 };

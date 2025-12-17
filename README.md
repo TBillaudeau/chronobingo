@@ -4,10 +4,7 @@ A real-time multiplayer music bingo game for your parties.
 
 ## 📸 Screenshots
 
-*Add your screenshots here*
-
-![Lobby Screenshot](./screenshots/lobby.png)
-![Game Screenshot](./screenshots/game.png)
+![Lobby Screenshot](./screenshots/chronobingo_app.png)
 
 ## ✨ Key Features
 
@@ -16,12 +13,10 @@ A real-time multiplayer music bingo game for your parties.
 - **Variable Grid Sizes**: Choose between 3x3 (Fast), 4x4 (Classic), or 5x5 (Expert)
 - **Achievements System**: Unlock badges for your victories and milestones
 - **Individual Grid Lock**: Each player locks their grid when ready
-- **Host Powers**: Unlock grids, kick players, save games
 - **Guest & Google Auth**: Play instantly or save your stats
 - **Smart Cleanup**: Automatic cleanup of old games and ghost guests
 - **PWA Ready**: Install as a native app on mobile
 - **Bilingual**: Full support for French and English
-- **Docker Support**: Ready for deployment on platforms like Northflank
 
 ## 🚀 Quick Start
 
@@ -59,8 +54,6 @@ create table global_songs (
   artist text,
   cover text,
   preview text,
-  play_count int default 1,
-  last_played_at timestamp with time zone default now(),
   validation_count int default 0
 );
 

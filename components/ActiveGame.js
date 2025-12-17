@@ -2,24 +2,224 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { toBlob } from 'html-to-image';
+import confetti from 'canvas-confetti'; // VICTORY ANIMATION
 
 import { updatePlayerGrid, updateGame, subscribeToGame, toggleFavorite, getFavorites, joinGame, removeCurrentGameId, togglePlayerCell, finishGame, updateUserStats, togglePlayerGridLock, removePlayer, toggleSaveGame } from '../services/gameService';
-import { searchSongs, getTrendingSongs } from '../services/music';
+import { searchSongs, getTrendingSongs, refreshSongUrl } from '../services/music';
 import { t } from '../services/translations';
 import { hapticClick, hapticFeedback, hapticSuccess, hapticError } from '../services/haptics';
 import { sendNotification } from '../services/notifications';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
-import { trainDatabase, findMatchV2 } from '../services/autoDaubService';
+import { trainDatabase, findMatchV2, CAPTURE_PROCESSOR_CODE } from '../services/autoDaubService';
+import Tutorial from './Tutorial';
+import JokerRoulette from './JokerRoulette'; // JOKER SYSTEM
+
+// Utility to format remaining time (e.g. "65s" -> "1m 5s" or just "2m")
+const formatTime = (ms) => {
+    const s = Math.ceil(ms / 1000);
+    if (s < 60) return `${s}s`;
+    return `${Math.ceil(s / 60)}m`;
+};
 
 const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onNavigateToProfile }) => {
     const [game, setGame] = useState(initialGame);
     const [isAutoListening, setIsAutoListening] = useState(false);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [detectedMatch, setDetectedMatch] = useState(null); // Moved up for safe access
-    const autoDaubIntervalRef = useRef(null);
     const mediaStreamRef = useRef(null);
     const dbReadyRef = useRef(false);
     const matchHistoryRef = useRef({ id: null, count: 0 });
+
+    const [showJokerModal, setShowJokerModal] = useState(false);
+    const [jokerCooldown, setJokerCooldown] = useState(0);
+
+    // Status Effects (Timestamps for expiration)
+    const [frozenUntil, setFrozenUntil] = useState(0);
+    const [blindedUntil, setBlindedUntil] = useState(0);
+    const [protectedUntil, setProtectedUntil] = useState(0);
+    const [isZombie, setIsZombie] = useState(false); // Persistent until action
+
+    const [now, setNow] = useState(Date.now()); // For countdowns
+    const [selectedEffectInfo, setSelectedEffectInfo] = useState(null); // { title, desc, color }
+
+    // Update global timer every second for UI countdowns
+    useEffect(() => {
+        const i = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(i);
+    }, []);
+
+    // Derived states for logic
+    const isFrozen = now < frozenUntil;
+    const isBlinded = now < blindedUntil;
+    const isProtected = now < protectedUntil;
+
+    const handleApplyJoker = (joker) => {
+        hapticFeedback();
+
+        switch (joker.id) {
+            case 'wildcard':
+                // PASSE-PARTOUT: Auto-checks a random unmasked cell (Super Sniper)
+                const emptyCells = myPlayer.grid.filter(c => c.song && !c.marked);
+                if (emptyCells.length > 0) {
+                    const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                    handleCellClick(randomCell, -1);
+                    sendNotification(`🃏 ${myPlayer.name} a utilisé un Passe-Partout!`);
+                } else {
+                    alert("Grille déjà complète ! Joker gâché.");
+                }
+                break;
+
+            case 'remix':
+                // REMIX: Shuffle un-marked cells visual position locally
+                // Note: Changing actual grid index requires DB update. Visual only for MVP or full swap.
+                // Let's do full swap logic locally + Optimistic update
+                const newGrid = [...myPlayer.grid];
+                // Fisher-Yates shuffle
+                for (let i = newGrid.length - 1; i > 0; i--) {
+                    // Only swap if NOT marked (keep marked structure intact or chaos? Description says "non cochées")
+                    // If we shuffle only non-marked, we need to extract them, shuffle, put back. 
+                    // Simpler MVP: Shuffle ALL for now, or just notify.
+                    // Let's shuffle ALL to be safe with React keys for now, it's a remix after all.
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [newGrid[i], newGrid[j]] = [newGrid[j], newGrid[i]];
+                }
+                // We need to commit this to GameService ideally. 
+                // For MVP, we update local game state optimistically.
+                const updatedPlayer = { ...myPlayer, grid: newGrid };
+                const updatedPlayers = game.players.map(p => p.id === currentUser.id ? updatedPlayer : p);
+                setGame({ ...game, players: updatedPlayers });
+                // Also trigger DB update if possible (TODO)
+                updatePlayerGrid(game.id, currentUser.id, newGrid).catch(console.error);
+                break;
+
+            case 'cryo':
+                // CRYO-GUN: Freeze top player
+                const sortedPlayers = [...game.players].sort((a, b) => b.score - a.score);
+                const target = sortedPlayers[0];
+                if (target.id === currentUser.id) {
+                    // Backfire! I am the leader!
+                    setFrozenUntil(Date.now() + 1000 * 60 * 3); // 3 mins
+                    alert("🥶 Tu t'es gelé toi-même pour 3 minutes ! (Tu es le 1er)");
+                } else {
+                    // Would send network event here
+                    alert(`🥶 Attaque Cryo envoyée sur ${target.name} ! (Simulation: Il devrait être gelé 3min)`);
+                }
+                break;
+
+            case 'hotpotato':
+                // PATATE CHAUDE: Swap one unmarked cell with random song from Library? 
+                // MVP: Just unmark a random cell (Evil enough) or Replace song.
+                // Let's replace a random unmarked song with "Never Gonna Give You Up" (Rickroll) or similar.
+                // Finding a random cell
+                const replaceableCells = myPlayer.grid.filter(c => c.song && !c.marked);
+                if (replaceableCells.length > 0) {
+                    const cellToSwap = replaceableCells[Math.floor(Math.random() * replaceableCells.length)];
+                    // Ideally fetch random song. For now, let's just mark it as "SWAPPED" or visually distinct.
+                    alert(`💣 Patate Chaude ! Une case aurait du être échangée.`);
+                }
+                break;
+
+            case 'vampire':
+                // VAMPIRE: Steal 10 points
+                // Visual simulation
+                alert("🧛 Tu as volé 10 points (virtuels) à ton voisin !");
+                break;
+
+            case 'zombie':
+                alert("🧟 Zombie ! Une case random est infectée (Simulation).");
+                break;
+
+            case 'bunker':
+                setProtectedUntil(Date.now() + 1000 * 60 * 15); // 15 mins
+                alert("🛡️ Bunker activé ! Immunité totale pendant 15 min.");
+                break;
+
+            case 'casino':
+                if (Math.random() > 0.5) {
+                    hapticSuccess();
+                    alert("🎰 JACKPOT ! +50 Points !");
+                    // Logic to add points would go here
+                } else {
+                    hapticError();
+                    alert("🎰 Perdu... Score remis à 0 (Simulation, ouf !)");
+                }
+                break;
+
+            case 'unicorn':
+                // UNICORN: Auto-complete a row
+                // Find row with most checked items
+                const size = Math.sqrt(myPlayer.grid.length);
+                let bestRow = -1;
+                let maxMarked = -1;
+
+                for (let r = 0; r < size; r++) {
+                    let marked = 0;
+                    for (let c = 0; c < size; c++) if (myPlayer.grid[r * size + c].marked) marked++;
+                    if (marked < size && marked > maxMarked) { // Must not be already full
+                        maxMarked = marked;
+                        bestRow = r;
+                    }
+                }
+
+                if (bestRow !== -1) {
+                    // Mark all in this row
+                    for (let c = 0; c < size; c++) {
+                        const cell = myPlayer.grid[bestRow * size + c];
+                        if (!cell.marked) handleCellClick(cell, -1);
+                    }
+                    sendNotification(`🦄 LICORNE ! ${myPlayer.name} a complété une ligne !`);
+                } else {
+                    // Fallback random
+                    const emptyCells = myPlayer.grid.filter(c => c.song && !c.marked);
+                    if (emptyCells.length > 0) {
+                        const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                        handleCellClick(randomCell, -1);
+                    }
+                }
+                break;
+
+            case 'kamikaze':
+                // Mark 3 cells random
+                const emptyCellsK = myPlayer.grid.filter(c => c.song && !c.marked);
+                const toMark = [];
+                for (let i = 0; i < 3 && emptyCellsK.length > 0; i++) {
+                    const idx = Math.floor(Math.random() * emptyCellsK.length);
+                    toMark.push(emptyCellsK[idx]);
+                    emptyCellsK.splice(idx, 1);
+                }
+                toMark.forEach(c => handleCellClick(c, -1));
+
+                // Freeze self
+                setFrozenUntil(Date.now() + 1000 * 60 * 60); // 1h
+                alert("🧨 KAMIKAZE ! 3 cases validées, mais tu es GELÉ pour 1h !");
+                break;
+
+            case 'incognito':
+                alert("🕵️ Incognito activé ! Score masqué.");
+                break;
+
+            case 'eclipse':
+                // Blinds opponents. Simulator locally: Blinds self for demo.
+                setBlindedUntil(Date.now() + 1000 * 60 * 30); // 30m
+                alert("🌓 Éclipse ! Les titres sont cachés.");
+                break;
+
+            default:
+                console.log("Applied Joker:", joker.name);
+        }
+
+        // Cooldown 30 mins
+        setJokerCooldown(Date.now() + 1000 * 60 * 30);
+    };
+    const [showBatteryWarning, setShowBatteryWarning] = useState(false);
+
+    // Auto-hide Battery Warning after 5s
+    useEffect(() => {
+        if (showBatteryWarning) {
+            const timer = setTimeout(() => setShowBatteryWarning(false), 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [showBatteryWarning]);
 
     // Fix stale closure in async callbacks
     const gameRef = useRef(game);
@@ -27,10 +227,51 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
 
     // Debug Popup State
     useEffect(() => {
-        if (detectedMatch) console.log("📢 POPUP STATE UPDATED:", detectedMatch.cell.song.title);
     }, [detectedMatch]);
 
     // ... (skipping unchanged code) ...
+
+    // --- VICTORY EFFECTS ---
+    const previousBingoCountRef = useRef(0);
+
+    useEffect(() => {
+        if (!game || !currentUser) return;
+        const myPlayer = game.players.find(p => p.id === currentUser.id);
+        if (!myPlayer) return;
+
+        const currentBingos = myPlayer.bingoCount || 0;
+        const previousBingos = previousBingoCountRef.current;
+
+        if (currentBingos > previousBingos) {
+            // FIREWORKS!
+            const duration = 3000;
+            const end = Date.now() + duration;
+
+            const frame = () => {
+                confetti({
+                    particleCount: 5,
+                    angle: 60,
+                    spread: 55,
+                    origin: { x: 0 },
+                    colors: ['#ff00ff', '#00ffff', '#ffff00']
+                });
+                confetti({
+                    particleCount: 5,
+                    angle: 120,
+                    spread: 55,
+                    origin: { x: 1 },
+                    colors: ['#ff00ff', '#00ffff', '#ffff00']
+                });
+
+                if (Date.now() < end) {
+                    requestAnimationFrame(frame);
+                }
+            };
+            frame();
+            hapticSuccess();
+        }
+        previousBingoCountRef.current = currentBingos;
+    }, [game, currentUser.id]);
 
     // AUTO-DAUB LOGIC
     const toggleAutoDaub = async () => {
@@ -80,42 +321,8 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
             preAmp.gain.value = 4.0;
             source.connect(preAmp);
 
-            // Use AudioWorklet
-            const workletCode = `
-                class CaptureProcessor extends AudioWorkletProcessor {
-                    constructor() {
-                        super();
-                        this.samplesCollected = 0;
-                        this.bufferSize = sampleRate * 6; // Increase to 6s for better matching context 
-                        this.buffer = new Float32Array(this.bufferSize);
-                        this.lastLog = currentTime;
-                    }
-                    process(inputs) {
-                        const input = inputs[0];
-                        if (!input || !input.length) return true;
-                        
-                        // Debug Logs
-                        if (currentTime - this.lastLog > 3.0) {
-                             this.port.postMessage({ type: 'log', message: 'V2 Worklet Alive' });
-                             this.lastLog = currentTime;
-                        }
-
-                        const channelData = input[0];
-                        
-                        if (this.samplesCollected + channelData.length > this.bufferSize) {
-                            this.port.postMessage(this.buffer); // Send full buffer
-                            this.samplesCollected = 0; 
-                        }
-                        
-                        this.buffer.set(channelData, this.samplesCollected);
-                        this.samplesCollected += channelData.length;
-                        return true;
-                    }
-                }
-                registerProcessor('capture-processor', CaptureProcessor);
-            `;
-
-            const blob = new Blob([workletCode], { type: 'application/javascript' });
+            // Use AudioWorklet (Code imported from service to avoid redundancy)
+            const blob = new Blob([CAPTURE_PROCESSOR_CODE], { type: 'application/javascript' });
             const workletUrl = URL.createObjectURL(blob);
             try { await audioContext.audioWorklet.addModule(workletUrl); } catch (e) { }
 
@@ -125,7 +332,6 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
 
             workletNode.port.onmessage = (e) => {
                 if (e.data.type === 'log') {
-                    console.log("🎤 " + e.data.message);
                     return;
                 }
 
@@ -160,7 +366,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                     const currentP = currentG.players.find(p => p.id === currentUser.id) || currentG.players[0];
 
                     // DEBUG: Log what we are looking for
-                    // console.log(`🔍 Seeking matchId: "${matchId}" in grid of ${currentP.grid.length} cells`);
+
 
                     // USE LOOSE EQUALITY (==) to handle String vs Number IDs
                     const cell = currentP.grid.find(c => c.song && c.song.id == matchId);
@@ -174,33 +380,44 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                 matchHistoryRef.current = { id: cell.id, count: 1 };
                             }
 
-                            console.log(`🎤 Detection: ${cell.song.title} (${score.toFixed(2)}) - Streak: ${matchHistoryRef.current.count}`);
 
                             if (matchHistoryRef.current.count >= 2) {
-                                console.log(`✅ STABLE MATCH FOUND: ${cell.song.title}`);
                                 setDetectedMatch(prev => {
                                     if (prev && prev.cell.id === cell.id) return prev;
                                     hapticClick();
                                     return { cell, score };
                                 });
                             }
-                        } else {
-                            console.log(`⚠️ Cell found but ALREADY MARKED: ${cell.song.title}`);
                         }
-                    } else {
-                        console.log(`❌ Song detected (${score.toFixed(2)}) but NOT IN GRID: ID ${matchId}`);
                     }
                 });
             };
 
             const gainNode = audioContext.createGain();
-            gainNode.gain.value = 0;
+            // TRICK: Very low volume (not zero) to keep AudioContext processing in background on some devices
+            gainNode.gain.value = 0.001;
 
             preAmp.connect(workletNode);
             workletNode.connect(gainNode);
             gainNode.connect(audioContext.destination);
 
+            // WAKE LOCK: Keep screen awake if possible (simplest way to prevent full sleep)
+            if ('wakeLock' in navigator) {
+                try {
+                    await navigator.wakeLock.request('screen');
+                } catch (e) {
+                }
+            }
+
+            // MEDIA SESSION HACK: Register dummy handlers to keep "media" active
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.playbackState = "playing";
+                navigator.mediaSession.setActionHandler('play', () => { });
+                navigator.mediaSession.setActionHandler('pause', () => { });
+            }
+
             setIsAutoListening(true);
+            setShowBatteryWarning(true);
             mediaStreamRef.current.audioContext = audioContext;
 
         } catch (e) {
@@ -228,30 +445,41 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
     const [showImageShareModal, setShowImageShareModal] = useState(false);
     const shareRef = useRef(null);
 
+
     // AUDIO HANDLING
-    const { playingUrl, toggleAudio: hookToggleAudio } = useAudioPlayer((songId, freshUrl) => {
-        // We need to find the correct player object here because 'myPlayer' variable might be stale or not defined in this closure scope if defined later.
-        // Or we rely on 'game' and 'currentUser' which are props/state.
-        const player = game.players.find(p => p.id === currentUser.id) || game.players[0];
-        if (player) {
-            const newGrid = player.grid.map(c => {
-                if (c.song && c.song.id === songId) {
-                    return { ...c, song: { ...c.song, preview: freshUrl } };
+    const { playingUrl, playingId, toggleAudio: hookToggleAudio } = useAudioPlayer((songId, freshUrl) => {
+        // Update LOCAL state for ANY player (myself or opponent) so the UI sees the new URL matches 'playingUrl'
+        // This ensures the Play/Pause icon toggles correctly even if the URL changed.
+        const updatedPlayers = game.players.map(p => {
+            const hasSong = p.grid.some(c => c.song && c.song.id === songId);
+            if (hasSong) {
+                const newGrid = p.grid.map(c => {
+                    if (c.song && c.song.id === songId) {
+                        return { ...c, song: { ...c.song, preview: freshUrl } };
+                    }
+                    return c;
+                });
+
+                // If it's ME, also sync to DB (Optimistic + Backend)
+                if (p.id === currentUser.id) {
+                    updatePlayerGrid(game.id, currentUser.id, newGrid);
                 }
-                return c;
-            });
-            // Optimistic Local Update
-            optimisticallyUpdateGrid(newGrid);
-            // Background DB Update
-            updatePlayerGrid(game.id, currentUser.id, newGrid);
-        }
+
+                return { ...p, grid: newGrid };
+            }
+            return p;
+        });
+
+        // Force update game state locally so the re-render happens with new Preview URLs
+        setGame(prev => ({ ...prev, players: updatedPlayers }));
     });
 
     // Wrapper to add haptic click
+    // Wrapper to add haptic click
     const toggleAudio = (e, songOrUrl) => {
-        if (e) e.stopPropagation();
+        if (e && e.stopPropagation) e.stopPropagation();
         hapticClick();
-        hookToggleAudio(e, songOrUrl);
+        hookToggleAudio(songOrUrl);
     };
 
     // Compatibility wrapper for callers sending just URL (like modal closing)
@@ -596,9 +824,10 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                         });
                     };
 
-                    // Attempt 1: High quality with smart filtering
+                    // Attempt 1: High quality
+                    // Reduced pixelRatio to 2 to avoid memory crashes on mobile which might be causing the fallback to trigger
                     const blob = await toBlob(shareRef.current, {
-                        pixelRatio: 3,
+                        pixelRatio: 2,
                         backgroundColor: '#0f172a',
                         filter: (node) => node.tagName !== 'LINK' && !(node.getAttribute && node.getAttribute('data-broken') === 'true'),
                         fontEmbedCSS: '',
@@ -607,29 +836,47 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                     });
                     setShareImageBlob(blob);
                 } catch (e) {
-                    console.log("High res screenshot failed, trying fallback...", e);
+                    console.log("High res screenshot failed, trying Standard quality...", e);
                     try {
-                        // Attempt 2: Nuclear option - No images at all, just structure to ensure it works
+                        // Attempt 2: Standard quality - No cacheBust, lower ratio, KEEP IMAGES
                         const blob = await toBlob(shareRef.current, {
-                            pixelRatio: 2,
+                            pixelRatio: 1.5,
                             backgroundColor: '#0f172a',
-                            filter: (node) => node.tagName !== 'LINK' && node.tagName !== 'IMG',
+                            // No cacheBust here to try standard cache
+                            // No aggressive filter on IMG
+                            filter: (node) => node.tagName !== 'LINK' && !(node.getAttribute && node.getAttribute('data-broken') === 'true'),
                             fontEmbedCSS: '',
-                            onClone: (clonedNode) => {
-                                const names = clonedNode.querySelectorAll('.share-name');
-                                names.forEach(n => {
-                                    n.style.maxWidth = 'none';
-                                    n.style.overflow = 'visible';
-                                    n.classList.remove('truncate');
-                                });
-                            }
+                            onClone: fixTruncation
                         });
                         setShareImageBlob(blob);
                     } catch (e2) {
-                        console.error("All screenshot attempts failed", e2);
-                        alert("Impossible de générer l'image. Désolé !");
+                        console.log("Standard screenshot failed, trying fallback...", e2);
+                        try {
+                            // Attempt 3: Nuclear option - No images at all, just structure to ensure it works
+                            const blob = await toBlob(shareRef.current, {
+                                pixelRatio: 1,
+                                backgroundColor: '#0f172a',
+                                filter: (node) => node.tagName !== 'LINK' && node.tagName !== 'IMG',
+                                fontEmbedCSS: '',
+                                onClone: (clonedNode) => {
+                                    const names = clonedNode.querySelectorAll('.share-name');
+                                    names.forEach(n => {
+                                        n.style.maxWidth = 'none';
+                                        n.style.overflow = 'visible';
+                                        n.classList.remove('truncate');
+                                        n.style.fontSize = '90%';
+                                    });
+                                }
+                            });
+                            setShareImageBlob(blob);
+                        } catch (e3) {
+                            console.error("All screenshot attempts failed", e3);
+                            alert(t(lang, 'game.errorScreenshot'));
+                            setShowImageShareModal(false);
+                        }
                     }
                 }
+
             }
         }, 800);
     };
@@ -688,7 +935,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                         {winners.map((p, i) => (
                             <div key={p.id} className={`flex items-center p-4 rounded-3xl ${i === 0 ? 'bg-gradient-to-r from-yellow-500/20 to-yellow-600/20 border border-yellow-500' : 'glass-liquid'} animate-pop`} style={{ animationDelay: `${i * 0.2}s` }}>
                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-xl mr-4 ${i === 0 ? 'bg-yellow-500 text-black' : i === 1 ? 'bg-slate-300 text-black' : i === 2 ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-500'}`}>{i + 1}</div>
-                                <img src={p.avatar} className="w-14 h-14 rounded-full border-2 border-white/10 mr-4 object-cover" alt="avt" />
+                                <img src={p.avatar} className="w-14 h-14 rounded-full border-2 border-white/10 mr-4 object-cover" crossOrigin="anonymous" alt="avt" />
                                 <div className="flex-1">
                                     <p className="text-xl font-bold text-white">{p.name}</p>
                                     <p className="text-xs text-slate-400 font-black uppercase">{p.bingoCount} BINGO</p>
@@ -710,15 +957,22 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
     }
 
     return (
-        <div className="w-full max-w-md mx-auto pb-20 relative min-h-screen flex flex-col">
+        <div className="w-full max-w-md mx-auto pb-20 relative min-h-dvh flex flex-col">
+            {/* Battery Warning Banner */}
+            {showBatteryWarning && (
+                <div className="fixed top-0 left-0 w-full z-[100] bg-gradient-to-r from-red-600 to-orange-600 text-white text-[10px] font-bold py-2 px-4 text-center shadow-xl animate-slide-down border-b border-white/20">
+                    {t(lang, 'game.batteryBanner')}
+                </div>
+            )}
+
             {showConfetti && (
                 <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center animate-pop">
                     <div className="text-9xl animate-bounce filter drop-shadow-[0_0_30px_rgba(217,70,239,0.8)]">🎉</div>
                 </div>
             )}
 
-            {/* Header - Cleaned up style (No glass-liquid borders) */}
-            <header className="px-4 py-3 flex justify-between items-center sticky top-0 z-30 mb-4 backdrop-blur-md bg-slate-900/30 border-b border-white/5">
+            {/* Header - Floating Capsule matching Lobby 'Bonjour' design */}
+            <header className="flex justify-between items-center sticky top-4 z-40 mb-8 mx-4 p-3 rounded-3xl glass-liquid transition-all">
                 <div className="flex-1 flex justify-start gap-2">
                     <button onClick={() => { hapticClick(); onLeave(); }} className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-white bg-white/5 rounded-full elastic-active">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
@@ -749,19 +1003,21 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                 </div>
 
                 {game.status === 'finished' && (
-                    <button
-                        onClick={() => setShowGridOnGameOver(false)}
-                        className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2 bg-yellow-500 text-black font-black rounded-full shadow-lg animate-bounce"
-                    >
-                        🏆 {t(lang, 'game.viewPodium')}
-                    </button>
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50">
+                        <button
+                            onClick={() => setShowGridOnGameOver(false)}
+                            className="px-6 py-2 bg-yellow-500 text-black font-black rounded-full shadow-lg animate-bounce border-4 border-slate-900 whitespace-nowrap"
+                        >
+                            🏆 {t(lang, 'game.viewPodium')}
+                        </button>
+                    </div>
                 )}
 
                 {/* HOST FINISH BUTTON & TOOLS */}
                 <div className="flex-1 flex justify-end items-center gap-3">
 
 
-                    {isHost && game.players.some(p => p.isGridLocked) && (
+                    {isHost && game.status !== 'finished' && game.players.some(p => p.isGridLocked) && (
                         <button onClick={handleFinishGame} className="w-10 h-10 bg-red-500/20 border border-red-500 text-red-500 rounded-full flex items-center justify-center elastic-active">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
                                 <path fillRule="evenodd" d="M3 6a3 3 0 013-3h10a1 1 0 01.8 1.6L14.25 8l2.55 3.4A1 1 0 0116 13H6a1 1 0 00-1 1v3a1 1 0 11-2 0V6z" clipRule="evenodd" />
@@ -808,9 +1064,36 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                     <div className="animate-pop">
                         {/* GRID CONTAINER - Dynamic Grid Size */}
                         <div
-                            className="grid gap-3 aspect-square mb-6 select-none"
+                            className="grid gap-3 aspect-square mb-6 select-none relative"
                             style={{ gridTemplateColumns: `repeat(${Math.sqrt(myPlayer.grid.length) || 4}, 1fr)` }}
                         >
+                            {/* FROZEN OVERLAY - ICE EFFECT */}
+                            {isFrozen && (
+                                <div className="absolute -inset-4 z-50 rounded-3xl overflow-hidden pointer-events-none animate-in zoom-in-95 duration-500">
+                                    {/* Frost Texture */}
+                                    <div className="absolute inset-0 bg-cyan-100/20 backdrop-blur-[2px] mix-blend-overlay"></div>
+                                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cracked-glass.png')] opacity-50 mix-blend-overlay"></div>
+
+                                    {/* Borders / Frames */}
+                                    <div className="absolute inset-0 border-[8px] border-white/40 rounded-3xl shadow-[inset_0_0_20px_rgba(255,255,255,0.5)]"></div>
+
+                                    {/* Central Message */}
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="bg-slate-900/90 px-6 py-4 rounded-2xl border-2 border-cyan-300 shadow-[0_0_30px_rgba(34,211,238,0.5)] animate-bounce transform rotate-2">
+                                            <p className="text-5xl mb-2 text-center drop-shadow-lg">🥶</p>
+                                            <p className="font-black text-cyan-200 text-2xl uppercase tracking-[0.2em] text-center drop-shadow-[0_0_10px_rgba(34,211,238,0.8)]">
+                                                GELÉ !
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Floating Snowflakes */}
+                                    <div className="absolute top-4 left-4 text-2xl animate-spin-slow opacity-80">❄️</div>
+                                    <div className="absolute bottom-10 right-8 text-3xl animate-bounce opacity-80" style={{ animationDuration: '2s' }}>❄️</div>
+                                    <div className="absolute top-1/2 right-4 text-xl animate-pulse opacity-60">❄️</div>
+                                    <div className="absolute bottom-4 left-1/2 text-2xl animate-spin-slow opacity-70" style={{ animationDirection: 'reverse' }}>❄️</div>
+                                </div>
+                            )}
                             {myPlayer.grid.map((cell, index) => (
                                 <div
                                     key={cell.id}
@@ -834,22 +1117,31 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                     {cell.song ? (
                                         <>
                                             {/* Image with NO opacity, just cover */}
-                                            <img src={cell.song.cover} alt="art" className="absolute inset-0 w-full h-full object-cover transition-transform duration-500" />
+                                            <img src={cell.song.cover} alt="art" className="absolute inset-0 w-full h-full object-cover transition-transform duration-500" crossOrigin="anonymous" />
 
                                             {/* Dark Overlay for text readability (Darker if marked for contrast) */}
                                             <div className={`absolute inset-0 bg-black/50 transition-all duration-300 ${cell.marked ? 'bg-fuchsia-600/60 mix-blend-multiply' : ''}`} />
 
                                             {cell.song.preview && !isMoveMode && (
                                                 <div className="absolute top-1 right-1 z-30" onClick={(e) => toggleAudio(e, cell.song)}>
-                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center backdrop-blur-md border shadow-sm transition-all elastic-active ${playingUrl === cell.song.preview ? 'bg-cyan-400 border-cyan-200 animate-pulse' : 'bg-black/60 border-white/20'}`}>
-                                                        {playingUrl === cell.song.preview ? <div className="w-2 h-2 bg-white rounded-sm" /> : <span className="text-[10px]">🎵</span>}
+                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center backdrop-blur-md border shadow-sm transition-all elastic-active ${playingUrl === cell.song.preview || playingId === cell.song.id ? 'bg-cyan-400 border-cyan-200 animate-pulse' : 'bg-black/60 border-white/20'}`}>
+                                                        {playingUrl === cell.song.preview || playingId === cell.song.id ? <div className="w-2 h-2 bg-white rounded-sm" /> : <span className="text-[10px]">🎵</span>}
                                                     </div>
                                                 </div>
                                             )}
 
                                             <div className="relative z-10 w-full px-1 flex flex-col justify-end h-full pb-2">
-                                                <p className={`text-[11px] font-black leading-tight line-clamp-2 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] ${cell.marked ? 'text-white' : 'text-white'}`}>{cell.song.title}</p>
-                                                <p className="text-[9px] font-bold leading-tight line-clamp-1 text-slate-300 uppercase tracking-wide mt-0.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">{cell.song.artist}</p>
+                                                {!isBlinded ? (
+                                                    <>
+                                                        <p className={`text-[11px] font-black leading-tight line-clamp-2 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] ${cell.marked ? 'text-white' : 'text-white'}`}>{cell.song.title}</p>
+                                                        <p className="text-[9px] font-bold leading-tight line-clamp-1 text-slate-300 uppercase tracking-wide mt-0.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">{cell.song.artist}</p>
+                                                    </>
+                                                ) : (
+                                                    <div className="flex flex-col items-center justify-center animate-pulse">
+                                                        <span className="text-2xl drop-shadow-lg">❓</span>
+                                                        <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mt-1">???</span>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {cell.marked && (
@@ -890,27 +1182,130 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                         )}
 
                         {isMyGridLocked && (
-                            <div className="text-center p-4 glass-liquid rounded-3xl border border-fuchsia-500/20 mb-8 animate-pop">
+                            <div className="text-center p-4 glass-liquid rounded-3xl border border-fuchsia-500/20 mb-2 animate-pop relative">
                                 <p className="text-xs font-black text-fuchsia-400 uppercase tracking-widest mb-1">{t(lang, 'game.score')}</p>
                                 <div className="relative flex justify-center items-center h-20">
                                     <p className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400">{myPlayer.score}</p>
 
-                                    {/* Auto-Daub Button - Smaller & Absolute to keep score centered */}
-                                    {game.status !== 'finished' && (
-                                        <button
-                                            onClick={toggleAutoDaub}
-                                            className={`absolute right-4 w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all shadow-lg active:scale-95 ${isAutoListening ? 'bg-fuchsia-500 border-white text-white animate-pulse shadow-fuchsia-500/50' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-fuchsia-500/50 hover:text-white'}`}
-                                            title="Auto-Cochage"
-                                        >
-                                            {isAnalyzing ? (
-                                                <span className="animate-spin text-base">⌛</span>
+
+
+                                    {/* JOKER BUTTON (Left) */}
+                                    {game.settings?.jokersEnabled !== false && (
+                                        <div className="absolute left-2 top-1/2 -translate-y-1/2">
+                                            <button
+                                                onClick={() => {
+                                                    if (Date.now() < jokerCooldown) {
+                                                        hapticError();
+                                                        alert("Joker en recharge !");
+                                                        return;
+                                                    }
+                                                    hapticClick();
+                                                    setShowJokerModal(true);
+                                                }}
+                                                className={`
+                                                w-10 h-10 rounded-full flex items-center justify-center text-xl shadow-lg border-2 transition-all active:scale-95
+                                                ${Date.now() < jokerCooldown
+                                                        ? 'bg-slate-800 border-slate-700 opacity-50 cursor-not-allowed grayscale'
+                                                        : 'bg-gradient-to-br from-indigo-500 to-purple-600 border-white/20 hover:scale-110 animate-pulse'}
+                                            `}
+                                            >
+                                                🃏
+                                            </button>
+                                            {Date.now() < jokerCooldown ? (
+                                                <span className="text-[10px] text-slate-500 font-bold block mt-1">
+                                                    {Math.ceil((jokerCooldown - Date.now()) / 1000 / 60)}min
+                                                </span>
                                             ) : (
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={`w-5 h-5 ${isAutoListening ? 'text-white' : 'text-current'}`}>
-                                                    <path d="M8.25 4.5a3.75 3.75 0 117.5 0v8.25a3.75 3.75 0 11-7.5 0V4.5z" />
-                                                    <path d="M6 10.5a.75.75 0 01.75.75v1.5a5.25 5.25 0 1010.5 0v-1.5a.75.75 0 011.5 0v1.5a6.751 6.751 0 01-6 6.709v2.291h3a.75.75 0 010 1.5h-7.5a.75.75 0 010-1.5h3v-2.291a6.751 6.751 0 01-6-6.709v-1.5A.75.75 0 016 10.5z" />
-                                                </svg>
+                                                <span className="text-[9px] font-black uppercase tracking-wider text-indigo-400 mt-1 block">
+                                                    Joker
+                                                </span>
                                             )}
-                                        </button>
+                                        </div>
+                                    )}
+
+                                    {/* Auto-Daub Button (Right) */}
+                                    {game.status !== 'finished' && (
+                                        <div className="absolute right-4 flex flex-col items-center gap-1 group">
+                                            {/* Battery Warning Chip (Visible on Hover or Initial Activation) */}
+
+
+                                            <button
+                                                onClick={toggleAutoDaub}
+                                                className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all shadow-lg active:scale-95 ${isAutoListening ? 'bg-fuchsia-500 border-white text-white animate-pulse shadow-fuchsia-500/50' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-fuchsia-500/50 hover:text-white'}`}
+                                                title="Auto-Cochage"
+                                            >
+                                                {isAnalyzing ? (
+                                                    <span className="animate-spin text-base">⌛</span>
+                                                ) : (
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={`w-5 h-5 ${isAutoListening ? 'text-white' : 'text-current'}`}>
+                                                        <path d="M8.25 4.5a3.75 3.75 0 117.5 0v8.25a3.75 3.75 0 11-7.5 0V4.5z" />
+                                                        <path d="M6 10.5a.75.75 0 01.75.75v1.5a5.25 5.25 0 1010.5 0v-1.5a.75.75 0 011.5 0v1.5a6.751 6.751 0 01-6 6.709v2.291h3a.75.75 0 010 1.5h-7.5a.75.75 0 010-1.5h3v-2.291a6.751 6.751 0 01-6-6.709v-1.5A.75.75 0 016 10.5z" />
+                                                    </svg>
+                                                )}
+                                            </button>
+                                            <span className={`text-[9px] font-black uppercase tracking-wider ${isAutoListening ? 'text-fuchsia-400 animate-pulse' : 'text-slate-500'}`}>
+                                                Auto
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+
+                            </div>
+                        )}
+
+                        {/* STATUS EFFECTS SEPARATE CONTAINER - Full Width Match */}
+                        {(isFrozen || isBlinded || isProtected) && (
+                            <div className="relative flex flex-col items-center w-full mb-8 animate-in slide-in-from-top-2">
+
+                                {/* DYNAMIC INFO PANEL (Visible on click, Absolute Overlay) */}
+                                {selectedEffectInfo && (
+                                    <div
+                                        className={`absolute -top-12 z-50 px-4 py-2 rounded-xl text-center shadow-xl border animate-in slide-in-from-bottom-2 fade-in zoom-in-95 cursor-pointer min-w-[200px] max-w-[90%] ${selectedEffectInfo.color}`}
+                                        onClick={() => setSelectedEffectInfo(null)}
+                                        style={{ pointerEvents: 'auto' }}
+                                    >
+                                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45 border-b border-r border-inherit bg-inherit"></div>
+                                        <p className="text-xs font-black uppercase mb-0.5">{selectedEffectInfo.title}</p>
+                                        <p className="text-[10px] opacity-90 leading-tight">{selectedEffectInfo.desc}</p>
+                                    </div>
+                                )}
+
+                                <div className="glass-liquid rounded-3xl p-3 flex gap-2 justify-center w-full border border-white/10 shadow-[0_0_20px_rgba(0,0,0,0.3)]">
+                                    {isFrozen && (
+                                        <div
+                                            onClick={() => setSelectedEffectInfo({ title: t(lang, 'jokers.frozen'), desc: t(lang, 'jokers.frozenDesc'), color: 'bg-cyan-500 text-white border-cyan-400' })}
+                                            className="bg-cyan-500/90 text-white text-[9px] font-black px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-lg animate-pulse whitespace-nowrap border border-cyan-300 cursor-help active:scale-95 transition-transform"
+                                        >
+                                            <span className="text-sm">🧊</span>
+                                            <div className="flex flex-col leading-none">
+                                                <span>{t(lang, 'jokers.frozen')}</span>
+                                                <span className="opacity-80 text-[8px]">{formatTime(frozenUntil - now)}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {isBlinded && (
+                                        <div
+                                            onClick={() => setSelectedEffectInfo({ title: t(lang, 'jokers.blinded'), desc: t(lang, 'jokers.blindedDesc'), color: 'bg-slate-800 text-white border-slate-600' })}
+                                            className="bg-slate-800 text-white text-[9px] font-black px-3 py-1.5 rounded-xl flex items-center gap-2 border border-slate-600 shadow-lg whitespace-nowrap cursor-help active:scale-95 transition-transform"
+                                        >
+                                            <span className="text-sm">🌓</span>
+                                            <div className="flex flex-col leading-none">
+                                                <span>{t(lang, 'jokers.blinded')}</span>
+                                                <span className="opacity-80 text-[8px]">{formatTime(blindedUntil - now)}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {isProtected && (
+                                        <div
+                                            onClick={() => setSelectedEffectInfo({ title: t(lang, 'jokers.protected'), desc: t(lang, 'jokers.protectedDesc'), color: 'bg-emerald-500 text-slate-900 border-emerald-400' })}
+                                            className="bg-emerald-500 text-slate-900 text-[9px] font-black px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-lg whitespace-nowrap border border-emerald-300 cursor-help active:scale-95 transition-transform"
+                                        >
+                                            <span className="text-sm">🛡️</span>
+                                            <div className="flex flex-col leading-none">
+                                                <span>{t(lang, 'jokers.protected')}</span>
+                                                <span className="opacity-80 text-[8px]">{formatTime(protectedUntil - now)}</span>
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -940,22 +1335,24 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                             >
                                                 {p.grid.map((c, i) => (
                                                     <div
-                                                        key={i}
-                                                        onClick={(e) => c.song?.preview && toggleAudio(e, c.song.preview)}
-                                                        className={`relative rounded-lg overflow-hidden ${c.marked ? 'bg-fuchsia-600' : 'bg-white/5'} aspect-square cursor-pointer elastic-active border border-white/5`}
+                                                        key={`${p.id}-cell-${i}`}
+                                                        className={`relative rounded-lg overflow-hidden ${c.marked ? 'bg-fuchsia-600' : 'bg-white/5'} aspect-square border border-white/5`}
                                                     >
                                                         {c.song ? (
                                                             <>
-                                                                <img src={c.song.cover} className="absolute inset-0 w-full h-full object-cover" alt="" />
-                                                                {/* Dark overlay for opponents too */}
+                                                                <img src={c.song.cover} className="absolute inset-0 w-full h-full object-cover" alt="" crossOrigin="anonymous" />
                                                                 <div className="absolute inset-0 bg-black/50"></div>
 
-                                                                {playingUrl === c.song.preview && (
-                                                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20">
-                                                                        <div className="w-3 h-3 bg-cyan-400 animate-ping rounded-full"></div>
+                                                                {/* Play Button - Top Right (Exact match to main grid) */}
+                                                                {c.song.preview && (
+                                                                    <div className="absolute top-1 right-1 z-30" onClick={(e) => toggleAudio(e, c.song)}>
+                                                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center backdrop-blur-md border shadow-sm transition-all elastic-active cursor-pointer ${playingUrl === c.song.preview || playingId === c.song.id ? 'bg-cyan-400 border-cyan-200 animate-pulse' : 'bg-black/60 border-white/20'}`}>
+                                                                            {playingUrl === c.song.preview || playingId === c.song.id ? <div className="w-2 h-2 bg-white rounded-sm" /> : <span className="text-[10px]">🎵</span>}
+                                                                        </div>
                                                                     </div>
                                                                 )}
-                                                                <div className="absolute bottom-0 inset-x-0 p-1 flex flex-col justify-end h-full relative z-10">
+
+                                                                <div className="absolute bottom-0 inset-x-0 p-1 flex flex-col justify-end h-full relative z-10 pointer-events-none">
                                                                     <p className="text-[10px] leading-tight text-white truncate font-black text-center drop-shadow-md">{c.song.title}</p>
                                                                     <p className="text-[8px] leading-tight text-slate-300 truncate text-center mt-0.5 drop-shadow-md">{c.song.artist}</p>
                                                                 </div>
@@ -963,7 +1360,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                                         ) : <div className="w-full h-full flex items-center justify-center text-[8px] opacity-20">🎵</div>}
 
                                                         {c.marked && (
-                                                            <div className="absolute inset-0 flex items-center justify-center z-10 bg-fuchsia-500/60 mix-blend-multiply">
+                                                            <div className="absolute inset-0 flex items-center justify-center z-10 bg-fuchsia-500/60 mix-blend-multiply pointer-events-none">
                                                                 <div className="w-4 h-4 bg-white rounded-full shadow-md"></div>
                                                             </div>
                                                         )}
@@ -984,7 +1381,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                             <div key={p.id} className={`flex items-center p-4 rounded-2xl border ${p.id === currentUser.id ? 'bg-slate-800 border-cyan-500 shadow-lg' : 'glass-liquid border-transparent'}`}>
                                 <div className={`font-black w-8 text-center mr-2 ${i === 0 ? 'text-yellow-400 text-xl' : 'text-slate-500'}`}>{i + 1}</div>
                                 <div className="relative mr-4">
-                                    <img src={p.avatar} className="w-12 h-12 rounded-full border-2 border-slate-700 object-cover" alt="avt" />
+                                    <img src={p.avatar} className="w-12 h-12 rounded-full border-2 border-slate-700 object-cover" crossOrigin="anonymous" alt="avt" />
                                     {p.id === game.hostId && (
                                         <div className="absolute -bottom-1 -right-1 bg-fuchsia-600 text-white p-1 rounded-full border-2 border-slate-900 shadow-sm" title="Hôte">
                                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3">
@@ -1053,16 +1450,39 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                             </div>
                         ))}
 
-                        {isHost && !currentUser.isGuest && (
-                            <div className="mt-6 pt-4 border-t border-white/5 flex justify-center">
-                                <button
-                                    onClick={async () => { hapticClick(); await toggleSaveGame(game.id, !game.isSaved); }}
-                                    className={`px-4 py-3 rounded-xl font-bold uppercase tracking-widest text-xs border transition-all flex items-center gap-2 ${game.isSaved ? 'bg-green-500/20 text-green-400 border-green-500' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-white'}`}
-                                >
-                                    {game.isSaved ? t(lang, 'game.btnGameSaved') : t(lang, 'game.btnSaveGame')}
-                                </button>
-                            </div>
-                        )}
+                        <div className="mt-6 pt-4 border-t border-white/5 flex flex-row gap-3 justify-center">
+                            {/* Save Game Button */}
+                            <button
+                                onClick={async () => {
+                                    if (currentUser.isGuest) return;
+                                    hapticClick();
+                                    await toggleSaveGame(game.id, !game.isSaved);
+                                }}
+                                disabled={currentUser.isGuest}
+                                className={`px-4 py-2 rounded-lg font-bold uppercase tracking-wider text-[10px] transition-all flex items-center justify-center gap-2 ${currentUser.isGuest
+                                    ? 'text-slate-600 cursor-not-allowed grayscale'
+                                    : game.isSaved
+                                        ? 'bg-green-500/10 text-green-400'
+                                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                    }`}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                    <path fillRule="evenodd" d="M10 2c-1.716 0-3.408.106-5.07.31C3.806 2.45 3 3.414 3 4.517V17.25a.75.75 0 001.075.676L10 15.082l5.925 2.844A.75.75 0 0017 17.25V4.517c0-1.103-.806-2.068-1.93-2.207A41.403 41.403 0 0010 2z" clipRule="evenodd" />
+                                </svg>
+                                {game.isSaved ? t(lang, 'game.btnGameSaved') : t(lang, 'game.saveGame')}
+                            </button>
+
+                            {/* Share Story Button */}
+                            <button
+                                onClick={handleImageShare}
+                                className="px-4 py-2 rounded-lg font-bold uppercase tracking-wider text-[10px] text-fuchsia-400 hover:text-white hover:bg-fuchsia-500/10 transition-all flex items-center justify-center gap-2"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                    <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
+                                </svg>
+                                {t(lang, 'game.shareStory')}
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
@@ -1078,7 +1498,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                         }}></div>
 
                         {/* Modal Content */}
-                        <div className="relative w-full max-w-lg h-[92vh] md:h-[80vh] bg-slate-900/95 backdrop-blur-2xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-t-3xl md:rounded-3xl flex flex-col overflow-hidden animate-slide-up pt-safe">
+                        <div className="relative w-full max-w-lg h-[92vh] h-[92dvh] md:h-[80vh] bg-slate-900/95 backdrop-blur-2xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] rounded-t-3xl md:rounded-3xl flex flex-col overflow-hidden animate-slide-up pt-safe">
 
                             {/* Modal Header - Sticky & Safe Area */}
                             <div className="p-4 border-b border-white/5 flex items-center gap-3 bg-slate-900/80 backdrop-blur-xl sticky top-0 z-20">
@@ -1125,7 +1545,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                 </div>
                             )}
 
-                            <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-safe scrollbar-hide">
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-safe scrollbar-hide overscroll-contain">
                                 {displayedSongs.map((song, i) => (
                                     <div key={`${song.id}-${i}`} onClick={() => handleSongSelect(song)} className="group flex items-center gap-4 p-3 rounded-2xl hover:bg-white/5 cursor-pointer transition-all border border-transparent hover:border-white/10 animate-pop" style={{ animationDelay: `${i * 0.05}s` }}>
 
@@ -1423,7 +1843,18 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                 </div>
             )}
 
-        </div >
+            {/* TUTORIAL */}
+            <Tutorial lang={lang} />
+
+            {/* JOKER ROULETTE */}
+            {showJokerModal && (
+                <JokerRoulette
+                    lang={lang}
+                    onClose={() => setShowJokerModal(false)}
+                    onApplyJoker={handleApplyJoker}
+                />
+            )}
+        </div>
     );
 };
 

@@ -1,97 +1,209 @@
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import Link from 'next/link';
+import { useState, useEffect } from 'react';
+import { getBrowserLanguage } from '../services/translations';
+
+const translations = {
+    fr: {
+        title: "Politique de Confidentialité",
+        back: "← Retour au jeu",
+        updated: "Dernière mise à jour : 14 Décembre 2025",
+        intro: <>Bienvenue sur <strong>Chronobingo</strong>. Cette application est un projet personnel développé pour le divertissement entre amis. Nous prenons votre vie privée au sérieux, même pour un petit projet !</>,
+        sec1Title: "1. Les données que nous collectons",
+        sec1Desc: "Nous collectons uniquement le strict nécessaire pour que le jeu fonctionne :",
+        sec1Li1: <><strong>Votre profil Google (si vous vous connectez) :</strong> Nous récupérons uniquement votre ID technique, votre prénom et votre photo de profil. Nous ne stockons pas votre email.</>,
+        sec1Li2: <><strong>Données de jeu :</strong> Vos scores, vos victoires, votre historique de parties et vos chansons favorites.</>,
+        sec2Title: "2. Comment nous utilisons vos données",
+        sec2Desc: "Vos données servent uniquement à :",
+        sec2Li1: "Vous identifier quand vous revenez sur le jeu.",
+        sec2Li2: "Afficher votre avatar et votre pseudo aux autres joueurs dans le lobby.",
+        sec2Li3: "Garder une trace de vos statistiques (victoires, ratio, etc.).",
+        sec2Bold: "Nous ne vendons, ne partageons et n'analysons vos données à aucune fin commerciale ou publicitaire.",
+        sec3Title: "3. Services Tiers",
+        sec3Desc: "Nous utilisons des services externes pour faire fonctionner l'application :",
+        sec3Li1: <><strong>Supabase :</strong> Pour héberger la base de données et gérer l'authentification.</>,
+        sec3Li2: <><strong>Deezer :</strong> Pour rechercher les musiques et afficher les pochettes d'album.</>,
+        sec3Li3: <><strong>DiceBear :</strong> Pour générer les avatars des invités.</>,
+        sec4Title: "4. Vos Droits (Suppression)",
+        sec4Desc: "Vous pouvez à tout moment supprimer votre compte et toutes les données associées directement depuis l'application :",
+        sec4Li1: "Connectez-vous.",
+        sec4Li2: <>Allez dans votre <strong>Profil</strong> (cliquez sur votre avatar).</>,
+        sec4Li3: <>Allez dans l'onglet <strong>Paramètres</strong>.</>,
+        sec4Li4: <>Cliquez sur le bouton <strong>"Supprimer mon compte"</strong>.</>,
+        sec4Note: "Cette action efface instantanément votre profil de notre base de données.",
+        sec5Title: "5. Contact",
+        sec5Desc: "Pour toute question concernant ce projet ou vos données, vous pouvez contacter le développeur directement (c'est moi, votre pote !).",
+        sec6Title: "6. Mentions Légales",
+        sec6EdTitle: "Éditeur du site",
+        sec6EdText: "Le site Chronobingo est édité à titre personnel.",
+        sec6EdResp: "Responsable de la publication : L'administrateur du projet.",
+        sec6HostTitle: "Hébergement",
+        sec6HostText: "Ce site est hébergé par :",
+        footerNote: "Texte original",
+        toggleBtn: "Switch to English"
+    },
+    en: {
+        title: "Privacy Policy",
+        back: "← Back to game",
+        updated: "Last updated: December 14, 2025",
+        intro: <>Welcome to <strong>Chronobingo</strong>. This application is a personal project developed for fun with friends. We take your privacy seriously, even for a small project!</>,
+        sec1Title: "1. Data we collect",
+        sec1Desc: "We only collect the strict minimum for the game to work:",
+        sec1Li1: <><strong>Your Google Profile (if you log in):</strong> We only retrieve your technical ID, your first name, and your profile picture. We do NOT store your email.</>,
+        sec1Li2: <><strong>Game Data:</strong> Your scores, victories, game history, and favorite songs.</>,
+        sec2Title: "2. How we use your data",
+        sec2Desc: "Your data is used solely to:",
+        sec2Li1: "Identify you when you return to the game.",
+        sec2Li2: "Display your avatar and nickname to other players in the lobby.",
+        sec2Li3: "Keep track of your statistics (wins, ratio, etc.).",
+        sec2Bold: "We do not sell, share, or analyze your data for any commercial or advertising purpose.",
+        sec3Title: "3. Third Party Services",
+        sec3Desc: "We use external services to run the application:",
+        sec3Li1: <><strong>Supabase:</strong> To host the database and manage authentication.</>,
+        sec3Li2: <><strong>Deezer:</strong> To search for music and display album covers.</>,
+        sec3Li3: <><strong>DiceBear:</strong> To generate avatars for guests.</>,
+        sec4Title: "4. Your Rights (Deletion)",
+        sec4Desc: "You can delete your account and all associated data directly from the application at any time:",
+        sec4Li1: "Log in.",
+        sec4Li2: <>Go to your <strong>Profile</strong> (click on your avatar).</>,
+        sec4Li3: <>Go to the <strong>Settings</strong> tab.</>,
+        sec4Li4: <>Click on the <strong>"Delete my account"</strong> button.</>,
+        sec4Note: "This action instantly erases your profile from our database.",
+        sec5Title: "5. Contact",
+        sec5Desc: "For any questions regarding this project or your data, you can contact the developer directly (it's me, your buddy!).",
+        sec6Title: "6. Legal Notice",
+        sec6EdTitle: "Site Publisher",
+        sec6EdText: "The Chronobingo website is published personally.",
+        sec6EdResp: "Publication Director: The project administrator.",
+        sec6HostTitle: "Hosting",
+        sec6HostText: "This site is hosted by:",
+        footerNote: "Translated from French",
+        toggleBtn: "Voir l'original (Français)"
+    }
+};
 
 export default function PrivacyPolicy() {
+    const router = useRouter();
+    const [lang, setLang] = useState('fr');
+
+    useEffect(() => {
+        setLang(getBrowserLanguage());
+    }, []);
+
+    const t = translations[lang];
+
+    const handleBack = () => {
+        if (typeof window !== 'undefined' && window.history.length > 1) {
+            router.back();
+        } else {
+            router.push('/');
+        }
+    };
+
     return (
         <div className="min-h-screen bg-slate-900 text-slate-300 p-8 font-sans">
             <Head>
-                <title>Politique de Confidentialité - Chronobingo</title>
+                <title>{t.title} - Chronobingo</title>
             </Head>
 
             <div className="max-w-3xl mx-auto space-y-8">
                 <div className="flex items-center justify-between">
-                    <h1 className="text-4xl font-black text-white">Politique de Confidentialité</h1>
-                    <Link href="/" className="text-fuchsia-400 hover:text-fuchsia-300 font-bold">
-                        ← Retour au jeu
-                    </Link>
+                    <h1 className="text-4xl font-black text-white">{t.title}</h1>
+                    <button
+                        onClick={handleBack}
+                        className="text-fuchsia-400 hover:text-fuchsia-300 font-bold whitespace-nowrap ml-4 transition-colors"
+                    >
+                        {t.back}
+                    </button>
                 </div>
 
                 <div className="space-y-4">
-                    <p className="text-sm text-slate-500">Dernière mise à jour : 14 Décembre 2025</p>
+                    <p className="text-sm text-slate-500">{t.updated}</p>
 
                     <p>
-                        Bienvenue sur <strong>Chronobingo</strong>. Cette application est un projet personnel développé pour le divertissement entre amis.
-                        Nous prenons votre vie privée au sérieux, même pour un petit projet !
+                        {t.intro}
                     </p>
                 </div>
 
                 <section className="space-y-2">
-                    <h2 className="text-2xl font-bold text-white">1. Les données que nous collectons</h2>
-                    <p>Nous collectons uniquement le strict nécessaire pour que le jeu fonctionne :</p>
+                    <h2 className="text-2xl font-bold text-white">{t.sec1Title}</h2>
+                    <p>{t.sec1Desc}</p>
                     <ul className="list-disc pl-5 space-y-1">
-                        <li><strong>Votre profil Google (si vous vous connectez) :</strong> Nous récupérons uniquement votre adresse email, votre nom et votre photo de profil.</li>
-                        <li><strong>Données de jeu :</strong> Vos scores, vos victoires, votre historique de parties et vos chansons favorites.</li>
+                        <li>{t.sec1Li1}</li>
+                        <li>{t.sec1Li2}</li>
                     </ul>
                 </section>
 
                 <section className="space-y-2">
-                    <h2 className="text-2xl font-bold text-white">2. Comment nous utilisons vos données</h2>
-                    <p>Vos données servent uniquement à :</p>
+                    <h2 className="text-2xl font-bold text-white">{t.sec2Title}</h2>
+                    <p>{t.sec2Desc}</p>
                     <ul className="list-disc pl-5 space-y-1">
-                        <li>Vous identifier quand vous revenez sur le jeu.</li>
-                        <li>Afficher votre avatar et votre pseudo aux autres joueurs dans le lobby.</li>
-                        <li>Garder une trace de vos statistiques (victoires, ratio, etc.).</li>
+                        <li>{t.sec2Li1}</li>
+                        <li>{t.sec2Li2}</li>
+                        <li>{t.sec2Li3}</li>
                     </ul>
-                    <p className="font-bold text-white mt-2">Nous ne vendons, ne partageons et n'analysons vos données à aucune fin commerciale ou publicitaire.</p>
+                    <p className="font-bold text-white mt-2">{t.sec2Bold}</p>
                 </section>
 
                 <section className="space-y-2">
-                    <h2 className="text-2xl font-bold text-white">3. Services Tiers</h2>
-                    <p>Nous utilisons des services externes pour faire fonctionner l'application :</p>
+                    <h2 className="text-2xl font-bold text-white">{t.sec3Title}</h2>
+                    <p>{t.sec3Desc}</p>
                     <ul className="list-disc pl-5 space-y-1">
-                        <li><strong>Supabase :</strong> Pour héberger la base de données et gérer l'authentification.</li>
-                        <li><strong>Deezer :</strong> Pour rechercher les musiques et afficher les pochettes d'album.</li>
-                        <li><strong>DiceBear :</strong> Pour générer les avatars des invités.</li>
+                        <li>{t.sec3Li1}</li>
+                        <li>{t.sec3Li2}</li>
+                        <li>{t.sec3Li3}</li>
                     </ul>
                 </section>
 
                 <section className="space-y-2">
-                    <h2 className="text-2xl font-bold text-white">4. Vos Droits (Suppression)</h2>
+                    <h2 className="text-2xl font-bold text-white">{t.sec4Title}</h2>
                     <p>
-                        Vous pouvez à tout moment supprimer votre compte et toutes les données associées directement depuis l'application :
+                        {t.sec4Desc}
                     </p>
                     <ol className="list-decimal pl-5 space-y-1">
-                        <li>Connectez-vous.</li>
-                        <li>Allez dans votre <strong>Profil</strong> (cliquez sur votre avatar).</li>
-                        <li>Allez dans l'onglet <strong>Paramètres</strong>.</li>
-                        <li>Cliquez sur le bouton <strong>"Supprimer mon compte"</strong>.</li>
+                        <li>{t.sec4Li1}</li>
+                        <li>{t.sec4Li2}</li>
+                        <li>{t.sec4Li3}</li>
+                        <li>{t.sec4Li4}</li>
                     </ol>
-                    <p>Cette action efface instantanément votre profil de notre base de données.</p>
+                    <p>{t.sec4Note}</p>
                 </section>
 
                 <section className="space-y-2">
-                    <h2 className="text-2xl font-bold text-white">5. Contact</h2>
+                    <h2 className="text-2xl font-bold text-white">{t.sec5Title}</h2>
                     <p>
-                        Pour toute question concernant ce projet ou vos données, vous pouvez contacter le développeur directement (c'est moi, votre pote !).
+                        {t.sec5Desc}
                     </p>
                 </section>
 
                 <section className="space-y-2 border-t border-slate-800 pt-8 mt-8">
-                    <h2 className="text-2xl font-bold text-white">6. Mentions Légales</h2>
+                    <h2 className="text-2xl font-bold text-white">{t.sec6Title}</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="bg-slate-800/50 p-4 rounded-xl">
-                            <h3 className="font-bold text-fuchsia-400 mb-2">Éditeur du site</h3>
-                            <p>Le site Chronobingo est édité à titre personnel.</p>
-                            <p className="text-sm text-slate-400 mt-1">Responsable de la publication : L'administrateur du projet.</p>
+                            <h3 className="font-bold text-fuchsia-400 mb-2">{t.sec6EdTitle}</h3>
+                            <p>{t.sec6EdText}</p>
+                            <p className="text-sm text-slate-400 mt-1">{t.sec6EdResp}</p>
                         </div>
                         <div className="bg-slate-800/50 p-4 rounded-xl">
-                            <h3 className="font-bold text-cyan-400 mb-2">Hébergement</h3>
-                            <p>Ce site est hébergé par :</p>
+                            <h3 className="font-bold text-cyan-400 mb-2">{t.sec6HostTitle}</h3>
+                            <p>{t.sec6HostText}</p>
                             <p className="font-bold mt-1">Northflank</p>
                             <p className="text-xs text-slate-400">London, UK<br />(Cloud Infrastructure)</p>
                         </div>
                     </div>
                 </section>
+
+                {/* Translation Toggle Footer */}
+                <div className="mt-12 pt-8 border-t border-slate-800 flex flex-col items-center gap-2 text-sm text-slate-500">
+                    <p>{t.footerNote}</p>
+                    <button
+                        onClick={() => setLang(prev => prev === 'fr' ? 'en' : 'fr')}
+                        className="text-fuchsia-400 hover:text-white underline transition-colors"
+                    >
+                        {t.toggleBtn}
+                    </button>
+                </div>
             </div>
         </div>
     );

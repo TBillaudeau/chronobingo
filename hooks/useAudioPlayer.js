@@ -4,28 +4,31 @@ import { updateSongPreview } from '../services/gameService';
 
 export const useAudioPlayer = (onSongUpdate) => {
     const [playingUrl, setPlayingUrl] = useState(null);
+    const [playingId, setPlayingId] = useState(null);
     const audioRef = useRef(null);
 
     const toggleAudio = async (song, manualUrl = null) => {
-        // Support both (song object) and (e, song) signature or just (url) if strictly needed
-        // But for robust logic we need the SONG OBJECT (id, title, preview).
-        // If the first arg is an event (from onClick), ignore it or use 2nd arg.
-
         let targetSong = song;
         if (song && song.stopPropagation) {
-            // It's an event, assume 2nd arg is the song/url
+            song.stopPropagation();
             targetSong = manualUrl;
         }
 
         const url = targetSong?.preview || targetSong;
+        const id = targetSong?.id || null;
+
         if (!url) return;
 
-        if (playingUrl === url) {
+        // Check match by URL OR ID (robustness)
+        const isSame = (playingUrl === url) || (id && playingId === id);
+
+        if (isSame) {
             if (audioRef.current) {
                 audioRef.current.pause();
                 audioRef.current = null;
             }
             setPlayingUrl(null);
+            setPlayingId(null);
         } else {
             if (audioRef.current) audioRef.current.pause();
 
@@ -36,27 +39,27 @@ export const useAudioPlayer = (onSongUpdate) => {
                     await audio.play();
                     audioRef.current = audio;
                     setPlayingUrl(src);
-                    audio.onended = () => setPlayingUrl(null);
+                    setPlayingId(id);
+                    audio.onended = () => {
+                        setPlayingUrl(null);
+                        setPlayingId(null);
+                    };
                 } catch (err) {
                     console.warn("Audio Play Error:", err);
-                    // Check if eligible for refresh
-                    if ((err.name === 'NotSupportedError' || err.name === 'NotAllowedError') && typeof targetSong === 'object' && targetSong.id) {
-                        console.log("♻️ Auto-repairing song URL:", targetSong.title);
-                        const freshUrl = await refreshSongUrl(targetSong.id);
+                    // Always try to refresh if we have an ID
+                    if (typeof targetSong === 'object' && targetSong.id) {
+
+
+                        const currentBadUrl = targetSong?.preview || targetSong;
+                        const freshUrl = await refreshSongUrl(targetSong.id, currentBadUrl);
 
                         if (freshUrl && freshUrl !== src) {
-                            // 1. Update Global Cache
                             updateSongPreview(targetSong.id, freshUrl);
-
-                            // 2. Notify Parent to Update Local State
                             if (onSongUpdate) {
                                 onSongUpdate(targetSong.id, freshUrl);
                             } else {
-                                // Fallback mutation if no callback provided (works for simple cases)
                                 targetSong.preview = freshUrl;
                             }
-
-                            // 3. Retry Play
                             play(freshUrl);
                         }
                     }
@@ -73,5 +76,5 @@ export const useAudioPlayer = (onSongUpdate) => {
         };
     }, []);
 
-    return { playingUrl, toggleAudio };
+    return { playingUrl, playingId, toggleAudio };
 };

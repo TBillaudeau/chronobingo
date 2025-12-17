@@ -8,6 +8,7 @@ import Login from './Login';
 import GameLobby from './GameLobby';
 import ActiveGame from './ActiveGame';
 import Profile from './Profile';
+import InstallPrompt from './InstallPrompt';
 
 const VIEW = {
   LOGIN: 'LOGIN',
@@ -23,7 +24,12 @@ const MainGame = () => {
   const [lang, setLang] = useState('fr'); // Function init below
   const [initialGameCode, setInitialGameCode] = useState('');
   const [authLoading, setAuthLoading] = useState(true);
-  const [batterySaver, setBatterySaver] = useState(false);
+  // Theme State
+  const [themeMode, setThemeMode] = useState('system'); // 'system' | 'light' | 'dark'
+  const [ecoMode, setEcoMode] = useState(false); // boolean
+
+  // Derived state for actual rendering
+  const [effectiveTheme, setEffectiveTheme] = useState('light');
 
   useEffect(() => {
     // Init Settings from LocalStorage
@@ -31,9 +37,42 @@ const MainGame = () => {
     if (storedLang) setLang(storedLang);
     else setLang(getBrowserLanguage());
 
-    const storedBattery = localStorage.getItem('cb_battery');
-    if (storedBattery === 'true') setBatterySaver(true);
+    // Theme Init
+    const storedThemeMode = localStorage.getItem('cb_theme_mode');
+    if (storedThemeMode) setThemeMode(storedThemeMode);
+
+    const storedEco = localStorage.getItem('cb_eco');
+    if (storedEco === 'true') setEcoMode(true);
   }, []);
+
+  // Compute Effective Theme
+  useEffect(() => {
+    if (ecoMode) {
+      setEffectiveTheme('eco'); // Forces black + grayscale
+      return;
+    }
+
+    const computeFromTotal = () => {
+      if (themeMode === 'system') {
+        const isOsDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        return isOsDark ? 'dark' : 'light';
+      }
+      return themeMode;
+    };
+
+    setEffectiveTheme(computeFromTotal());
+
+    // Listener for system changes
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e) => {
+      if (themeMode === 'system') {
+        setEffectiveTheme(e.matches ? 'dark' : 'light');
+      }
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+
+  }, [themeMode, ecoMode]);
 
   // Persist handlers
   const handleLangChange = (l) => {
@@ -41,20 +80,29 @@ const MainGame = () => {
     localStorage.setItem('cb_lang', l);
   };
 
-  const handleBatteryChange = (val) => {
-    setBatterySaver(val);
-    localStorage.setItem('cb_battery', val);
+  const handleThemeModeChange = (mode) => {
+    setThemeMode(mode);
+    localStorage.setItem('cb_theme_mode', mode);
+  };
+
+  const handleEcoModeChange = (val) => {
+    setEcoMode(val);
+    localStorage.setItem('cb_eco', val);
   };
 
   const [pendingAction, setPendingAction] = useState(null);
 
-  // Battery Saver Auto-Detect (Android/Chrome only)
+  // Battery Auto-Detect (< 30%)
   useEffect(() => {
     if (typeof navigator.getBattery === 'function') {
       navigator.getBattery().then(battery => {
         const checkBattery = () => {
+          // If battery is low and not charging, AND user hasn't manually turned it off (we assume if they are here initially it's fine)
+          // To be safe, we only auto-enable if it's not already stored in LS? 
+          // For now, simple logic: Low Battery -> Auto Eco.
           if (battery.level <= 0.3 && !battery.charging) {
-            setBatterySaver(true);
+            setEcoMode(true);
+            // We don't persist this auto-switch to avoid annoying the user if they reload when charged
           }
         };
         checkBattery();
@@ -274,8 +322,13 @@ const MainGame = () => {
   }
 
   return (
-    <div className={`min-h-screen text-white relative overflow-hidden ${batterySaver ? 'bg-black' : ''}`}>
-      {!batterySaver && <StarryBackground />}
+    <div className={`min-h-screen text-white relative overflow-hidden transition-colors duration-500
+      ${effectiveTheme === 'dark' ? 'bg-black' : ''} 
+      ${effectiveTheme === 'eco' ? 'bg-black grayscale' : ''}
+      ${effectiveTheme === 'light' ? '' : ''}
+    `}>
+      {effectiveTheme !== 'eco' && <StarryBackground mode={effectiveTheme} />}
+      <InstallPrompt lang={lang} />
       <main className="relative z-10">
         {view === VIEW.LOGIN && (
           <Login lang={lang} onLogin={handleGuestLogin} initialCode={initialGameCode} />
@@ -322,8 +375,6 @@ const MainGame = () => {
             onRejoinGame={async (gameId) => {
               // Determine if guest or user
               const userToJoin = user;
-              // Reuse the game load logic directly or just update URL which triggers the join effect?
-              // Better: Explicitly call join
               try {
                 setAuthLoading(true);
                 const game = await joinGame(gameId, userToJoin.id);
@@ -339,8 +390,10 @@ const MainGame = () => {
                 setAuthLoading(false);
               }
             }}
-            batterySaver={batterySaver}
-            setBatterySaver={handleBatteryChange}
+            themeMode={themeMode}
+            setThemeMode={handleThemeModeChange}
+            ecoMode={ecoMode}
+            setEcoMode={handleEcoModeChange}
           />
         )}
       </main>

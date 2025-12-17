@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 
-const StarryBackground = () => {
+const StarryBackground = ({ mode = 'light' }) => {
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -28,11 +28,16 @@ const StarryBackground = () => {
   }, []);
 
   return (
-    <div className="absolute inset-0 w-full h-full min-h-screen z-0 overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 pointer-events-none">
+    <div className={`absolute inset-0 w-full h-full min-h-screen z-0 overflow-hidden pointer-events-none ${mode === 'dark' ? 'bg-black' : 'bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900'}`}>
       <div ref={containerRef} className="absolute inset-0 opacity-50"></div>
-      {/* Disco Lights effect */}
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-fuchsia-600/20 rounded-full blur-[100px] mix-blend-screen animate-pulse"></div>
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-cyan-500/20 rounded-full blur-[100px] mix-blend-screen animate-pulse" style={{ animationDelay: '1s' }}></div>
+
+      {/* Disco Lights effect - Only in Light Mode */}
+      {mode !== 'dark' && (
+        <>
+          <div className="absolute top-0 left-1/4 w-96 h-96 bg-fuchsia-600/20 rounded-full blur-[100px] mix-blend-screen animate-pulse"></div>
+          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-cyan-500/20 rounded-full blur-[100px] mix-blend-screen animate-pulse" style={{ animationDelay: '1s' }}></div>
+        </>
+      )}
       <style jsx global>{`
         @keyframes sparkle {
           0%, 100% { opacity: 0.2; transform: scale(0.8); }

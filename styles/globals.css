@@ -186,3 +186,16 @@ body {
 .min-h-safe {
   min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
 }
+
+/* --- DYNAMIC VIEWPORT UTILITIES (Safari Fix) --- */
+.h-dvh {
+  height: 100vh;
+  /* Fallback */
+  height: 100dvh;
+}
+
+.min-h-dvh {
+  min-height: 100vh;
+  /* Fallback */
+  min-height: 100dvh;
+}

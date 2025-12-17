@@ -13,6 +13,7 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [noDuplicates, setNoDuplicates] = useState(false);
+  const [jokersEnabled, setJokersEnabled] = useState(false); // Default OFF
   const [gridSize, setGridSize] = useState(4);
   const { playingUrl, toggleAudio: hookToggleAudio } = useAudioPlayer((songId, freshUrl) => {
     setTopSongs(prev => prev.map(s => s.id === songId ? { ...s, preview: freshUrl } : s));
@@ -38,13 +39,13 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
   const handleCreate = async () => {
     hapticClick();
     if (!user) {
-      onRequestLogin({ type: 'create', noDuplicates, gridSize });
+      onRequestLogin({ type: 'create', noDuplicates, gridSize, jokersEnabled });
       return;
     }
     setLoading(true);
     try {
       // Always allow late join, no option needed
-      const settings = { noDuplicates, gridSize };
+      const settings = { noDuplicates, gridSize, jokersEnabled };
       const game = await createGame(user, settings);
       onJoinGame(game);
     } catch (e) {
@@ -112,224 +113,262 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
   };
 
   return (
-    <div className="flex flex-col items-center w-full max-w-4xl mx-auto px-4 py-8 animate-pop">
+    <div className="flex flex-col items-center w-full max-w-4xl mx-auto pb-12 animate-pop">
 
-      {/* Header Logic */}
-      {user ? (
-        user.isGuest ? (
-          /* Guest Banner */
-          <div
-            className="w-full glass-liquid bg-fuchsia-900/20 border-fuchsia-500/30 p-4 rounded-3xl mb-8 cursor-pointer group hover:border-fuchsia-500/50 transition-all animate-slide-up"
-            onClick={() => { hapticClick(); onNavigateToProfile(); }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 shrink-0 aspect-square rounded-full bg-fuchsia-500/20 flex items-center justify-center text-2xl border border-fuchsia-500/50">
-                  ✨
-                </div>
-                <div>
-                  <p className="text-white font-black text-lg leading-tight">{t(lang, 'lobby.guestMode')}</p>
-                  <p className="text-fuchsia-300 text-xs font-bold">{t(lang, 'lobby.guestModeDesc')}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleGuestConnect(); }}
-                  className="px-4 py-2 bg-fuchsia-600 text-white text-xs font-black rounded-xl hover:bg-fuchsia-500 transition-colors shadow-lg"
-                >
-                  {t(lang, 'lobby.guestLogin')}
-                </button>
-                <div className="w-10 h-10 shrink-0 aspect-square bg-white/10 rounded-xl flex items-center justify-center group-hover:bg-white/20 transition-colors text-white">
-                  ⚙️
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* Real User Profile Header */
-          <div className="flex items-center gap-4 mb-8 w-full glass-liquid p-4 rounded-3xl cursor-pointer group elastic-active hover:border-fuchsia-500/50 transition-all" onClick={() => { hapticClick(); onNavigateToProfile(); }}>
-            <div className="relative">
-              <img src={user.avatar} referrerPolicy="no-referrer" alt={user.name} className="w-14 h-14 rounded-full border-2 border-fuchsia-500 shadow-[0_0_15px_rgba(217,70,239,0.5)] group-hover:scale-110 transition-transform duration-300" />
-              <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 bg-green-500"></div>
-            </div>
-            <div className="flex-1">
-              <h2 className="text-2xl font-black text-white tracking-tight">{t(lang, 'lobby.hello')}, {user.name} !</h2>
-              <p className="text-fuchsia-300 text-sm font-medium">{t(lang, 'profile.vipRole')}</p>
-            </div>
-            <div className="w-12 h-12 shrink-0 aspect-square bg-white/10 rounded-full flex items-center justify-center group-hover:bg-white/20 transition-colors">
-              <span className="text-xl block group-hover:rotate-90 transition-transform duration-500">⚙️</span>
-            </div>
-          </div>
-        )
-      ) : null}
-
-      {/* Recent Games (Resume) - For Everyone */}
-      {history.length > 0 && !activeGame && (
-        <div className="w-full mb-8 animate-pop delay-100">
-          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 ml-2">{t(lang, 'lobby.recentGames')}</h3>
-          <div className="grid gap-3">
-            {history.map((game) => (
-              <button
-                key={game.id}
-                onClick={() => handleJoin(game.id)}
-                disabled={loading}
-                className="w-full glass-liquid p-3 rounded-2xl flex items-center justify-between hover:bg-white/10 transition-colors elastic-active group text-left"
-              >
+      {/* Sticky Header Wrapper */}
+      <header className="sticky top-4 z-40 w-full px-4 mb-8 transition-all">
+        {user ? (
+          user.isGuest ? (
+            /* Guest Banner */
+            <div
+              className="w-full glass-liquid bg-fuchsia-900/20 border-fuchsia-500/30 p-4 rounded-3xl cursor-pointer group hover:border-fuchsia-500/50 transition-all animate-slide-up shadow-lg backdrop-blur-xl"
+              onClick={() => { hapticClick(); onNavigateToProfile(); }}
+            >
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold shadow-lg">
-                    🎮
+                  <div className="w-12 h-12 shrink-0 aspect-square rounded-full bg-fuchsia-500/20 flex items-center justify-center text-2xl border border-fuchsia-500/50">
+                    ✨
                   </div>
                   <div>
-                    <p className="font-black text-white tracking-wider font-mono text-lg group-hover:text-cyan-400 transition-colors">{game.id}</p>
-                    <p className="text-xs text-slate-400 uppercase font-bold">
-                      {t(lang, 'lobby.host')}: <span className="text-slate-300">{game.hostName}</span> • {formatDate(game.date)} • ({formatTimeAgo(game.date)})
-                      {game.isSaved && <> • <span className="text-yellow-400">💾 SAUVÉE</span></>}
-                    </p>
+                    <p className="text-white font-black text-lg leading-tight">{t(lang, 'lobby.guestMode')}</p>
+                    <p className="text-fuchsia-300 text-xs font-bold">{t(lang, 'lobby.guestModeDesc')}</p>
                   </div>
                 </div>
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-cyan-500 group-hover:text-slate-900 transition-all">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleGuestConnect(); }}
+                    className="px-4 py-2 bg-fuchsia-600 text-white text-xs font-black rounded-xl hover:bg-fuchsia-500 transition-colors shadow-lg"
+                  >
+                    {t(lang, 'lobby.guestLogin')}
+                  </button>
+                  <div className="w-10 h-10 shrink-0 aspect-square bg-white/10 rounded-xl flex items-center justify-center group-hover:bg-white/20 transition-colors text-white">
+                    ⚙️
+                  </div>
                 </div>
-              </button>
+              </div>
+            </div>
+          ) : (
+            /* Real User Profile Header */
+            <div className="flex items-center gap-4 w-full glass-liquid p-4 rounded-3xl cursor-pointer group elastic-active hover:border-fuchsia-500/50 transition-all shadow-lg backdrop-blur-xl" onClick={() => { hapticClick(); onNavigateToProfile(); }}>
+              <div className="relative">
+                <img src={user.avatar} referrerPolicy="no-referrer" alt={user.name} className="w-14 h-14 rounded-full border-2 border-fuchsia-500 shadow-[0_0_15px_rgba(217,70,239,0.5)] group-hover:scale-110 transition-transform duration-300" />
+                <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 bg-green-500"></div>
+              </div>
+              <div className="flex-1">
+                <h2 className="text-2xl font-black text-white tracking-tight">{t(lang, 'lobby.hello')}, {user.name} !</h2>
+                <p className="text-fuchsia-300 text-sm font-medium">{t(lang, 'profile.vipRole')}</p>
+              </div>
+              <div className="w-12 h-12 shrink-0 aspect-square bg-white/10 rounded-full flex items-center justify-center group-hover:bg-white/20 transition-colors">
+                <span className="text-xl block group-hover:rotate-90 transition-transform duration-500">⚙️</span>
+              </div>
+            </div>
+          )
+        ) : null}
+      </header>
+
+      {/* Main Content */}
+      <div className="w-full px-4">
+
+        {/* Recent Games (Resume) - For Everyone */}
+        {history.length > 0 && !activeGame && (
+          <div className="w-full mb-8 animate-pop delay-100">
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 ml-2">{t(lang, 'lobby.recentGames')}</h3>
+            <div className="grid gap-3">
+              {history.map((game) => (
+                <button
+                  key={game.id}
+                  onClick={() => handleJoin(game.id)}
+                  disabled={loading}
+                  className="w-full glass-liquid p-3 rounded-2xl flex items-center justify-between hover:bg-white/10 transition-colors elastic-active group text-left"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold shadow-lg">
+                      🎮
+                    </div>
+                    <div>
+                      <p className="font-black text-white tracking-wider font-mono text-lg group-hover:text-cyan-400 transition-colors">{game.id}</p>
+                      <p className="text-xs text-slate-400 uppercase font-bold">
+                        {t(lang, 'lobby.host')}: <span className="text-slate-300">{game.hostName}</span> • {formatDate(game.date)} • ({formatTimeAgo(game.date)})
+                        {game.isSaved && <> • <span className="text-yellow-400">💾 SAUVÉE</span></>}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-cyan-500 group-hover:text-slate-900 transition-all">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+          {/* Action: Create */}
+          <div className="glass-liquid p-6 rounded-3xl flex flex-col items-center text-center hover:bg-white/5 transition-all h-full min-h-[320px] justify-between animate-float-fast" style={{ animationDelay: '0s' }}>
+            <div className="flex flex-col items-center w-full">
+              <div className="w-20 h-20 bg-gradient-to-br from-fuchsia-500 to-purple-600 rounded-2xl rotate-3 flex items-center justify-center mb-4 text-white shadow-lg shadow-fuchsia-900/50 group-hover:rotate-6 transition-transform duration-300">
+                <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+              </div>
+              <h3 className="text-3xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-white to-fuchsia-200">{t(lang, 'lobby.createTitle')}</h3>
+              <p className="text-slate-400 mb-4 font-medium">{t(lang, 'lobby.createDesc')}</p>
+
+              <div className="w-full mt-2">
+                <div
+                  onClick={() => { setNoDuplicates(!noDuplicates); hapticClick(); }}
+                  className={`w-full p-3 rounded-xl flex items-center gap-3 cursor-pointer transition-all elastic-active border ${noDuplicates ? 'bg-fuchsia-500/20 border-fuchsia-500' : 'bg-black/20 border-white/5 hover:bg-white/5'}`}
+                >
+                  <div className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${noDuplicates ? 'bg-fuchsia-500 text-white' : 'bg-slate-700 text-slate-400'}`}>
+                    {noDuplicates && '✓'}
+                  </div>
+                  <div className="text-left flex-1">
+                    <p className={`text-sm font-bold ${noDuplicates ? 'text-white' : 'text-slate-400'}`}>{t(lang, 'lobby.modeNoDuplicates')}</p>
+                    <p className="text-[9px] text-slate-500 leading-tight">{t(lang, 'lobby.modeNoDuplicatesDesc')}</p>
+                  </div>
+                </div>
+
+                <div
+                  // DISABLED: onClick={() => { setJokersEnabled(!jokersEnabled); hapticClick(); }}
+                  className={`relative w-full p-3 rounded-xl flex items-center gap-3 cursor-not-allowed transition-all border mt-2 opacity-50 grayscale bg-black/20 border-white/5`}
+                >
+                  <div className={`w-6 h-6 rounded-md flex items-center justify-center bg-slate-700 text-slate-400`}>
+                    {/* Checkmark removed since disabled */}
+                  </div>
+                  <div className="text-left flex-1">
+                    <p className={`text-sm font-bold text-slate-400`}>{t(lang, 'lobby.modeJokers')}</p>
+                    <p className="text-[9px] text-slate-500 leading-tight">{t(lang, 'lobby.modeJokersDesc')}</p>
+                  </div>
+                  <span className="absolute top-2 right-2 bg-yellow-400/20 text-yellow-300 text-[8px] font-black px-1.5 py-0.5 rounded border border-yellow-400/50 uppercase tracking-wider">
+                    SOON
+                  </span>
+                </div>
+
+                {/* MODE TEAM (Disabled / SOON) */}
+                <div
+                  className={`relative w-full p-3 rounded-xl flex items-center gap-3 cursor-not-allowed transition-all border mt-2 opacity-50 grayscale bg-black/20 border-white/5`}
+                >
+                  <div className={`w-6 h-6 rounded-md flex items-center justify-center bg-slate-700 text-slate-400`}>
+                    {/* Checkmark removed since disabled */}
+                  </div>
+                  <div className="text-left flex-1">
+                    <p className={`text-sm font-bold text-slate-400`}>{t(lang, 'lobby.modeTeam')}</p>
+                    <p className="text-[9px] text-slate-500 leading-tight">{t(lang, 'lobby.modeTeamDesc')}</p>
+                  </div>
+                  <span className="absolute top-2 right-2 bg-yellow-400/20 text-yellow-300 text-[8px] font-black px-1.5 py-0.5 rounded border border-yellow-400/50 uppercase tracking-wider">
+                    SOON
+                  </span>
+                </div>
+
+                {/* Grid Size Selector */}
+                <div className="w-full mt-3 bg-black/20 rounded-xl p-2 flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest shrink-0 ml-1">{t(lang, 'lobby.gridSize')}</p>
+                  <div className="flex gap-1 flex-1">
+                    {[3, 4, 5].map(size => (
+                      <button
+                        key={size}
+                        onClick={() => { setGridSize(size); hapticClick(); }}
+                        className={`flex-1 py-1.5 rounded-lg font-black text-xs transition-all elastic-active border ${gridSize === size ? 'bg-fuchsia-500 text-white border-fuchsia-400 shadow-[0_0_10px_rgba(217,70,239,0.5)]' : 'bg-transparent text-slate-500 border-white/10 hover:bg-white/5'}`}
+                      >
+                        {size}x{size}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleCreate}
+              disabled={loading}
+              className="w-full py-4 rounded-2xl font-bold bg-white text-fuchsia-900 hover:bg-fuchsia-50 shadow-xl elastic-active transition-all mt-4 text-lg"
+            >
+              {loading ? '...' : t(lang, 'lobby.btnCreate')}
+            </button>
+          </div>
+
+          {/* Action: Join - Harmonized Layout */}
+          <div className="glass-liquid p-6 rounded-3xl flex flex-col items-center text-center hover:bg-white/5 transition-all h-full min-h-[320px] justify-between animate-float-fast" style={{ animationDelay: '1.5s' }}>
+            <div className="flex flex-col items-center w-full">
+              <div className="w-20 h-20 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-2xl -rotate-3 flex items-center justify-center mb-4 text-white shadow-lg shadow-cyan-900/50 group-hover:-rotate-6 transition-transform duration-300">
+                <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
+              </div>
+              <h3 className="text-3xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-white to-cyan-200">{t(lang, 'lobby.joinTitle')}</h3>
+              <p className="text-slate-400 mb-4 font-medium">{t(lang, 'lobby.joinDesc')}</p>
+            </div>
+
+            <div className="w-full mt-4">
+              {error && <p className="text-red-400 text-xs font-bold animate-bounce mb-2">{error}</p>}
+
+              <div className="w-full flex flex-col gap-4">
+                <input
+                  type="text"
+                  placeholder="ABCDEF"
+                  className="w-full bg-black/20 text-white px-4 py-4 focus:outline-none uppercase font-mono tracking-[0.2em] text-center text-lg placeholder-slate-600 font-bold border border-white/10 rounded-2xl"
+                  value={joinId}
+                  onChange={(e) => {
+                    let val = e.target.value;
+                    // Smart Paste: Extract code from URL if present
+                    if (val.includes('game=')) {
+                      const match = val.match(/[?&]game=([^&]+)/);
+                      if (match && match[1]) val = match[1];
+                    }
+                    setJoinId(val.toUpperCase().trim());
+                    setError('');
+                  }}
+                />
+                <button
+                  onClick={() => handleJoin()}
+                  disabled={loading || !joinId}
+                  className="w-full py-4 rounded-2xl font-bold bg-cyan-500 text-slate-900 hover:bg-cyan-400 shadow-xl elastic-active transition-all text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? '...' : t(lang, 'lobby.btnJoin')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Top Songs List */}
+        <div className="mt-12 w-full animate-pop delay-200">
+          <h3 className="text-lg font-black mb-4 text-slate-300 flex items-center gap-2 uppercase tracking-widest">
+            <span className="text-yellow-400 text-xl">★</span> {t(lang, 'lobby.leaderboard')}
+          </h3>
+          <div className="glass-liquid rounded-3xl overflow-hidden p-2 space-y-2">
+            {topSongs.length === 0 ? (
+              <div className="text-center p-8 text-slate-500 text-sm font-bold">En attente de données...</div>
+            ) : topSongs.map((song, i) => (
+              <div key={song.id} className="flex items-center p-3 rounded-2xl hover:bg-white/10 transition-colors group cursor-default">
+                <div className={`font-black text-xl w-10 h-10 flex items-center justify-center rounded-xl mr-3 shadow-inner ${i === 0 ? 'bg-yellow-400 text-yellow-900' : i === 1 ? 'bg-slate-300 text-slate-900' : i === 2 ? 'bg-amber-700 text-amber-100' : 'bg-slate-800 text-slate-500'}`}>
+                  {i + 1}
+                </div>
+
+                <div className="relative w-12 h-12 shrink-0">
+                  <img src={song.cover} className="w-full h-full rounded-xl shadow-md group-hover:scale-110 transition-transform duration-300 object-cover" alt="Cover" />
+                  {song.preview && (
+                    <div className="absolute -bottom-2 -right-2 z-20">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleAudio(song); }}
+                        className={`w-6 h-6 rounded-full flex items-center justify-center shadow-lg backdrop-blur-md border transition-all ${playingUrl === song.preview ? 'bg-cyan-500 border-cyan-400 text-white animate-pulse' : 'bg-black/60 border-white/20 text-white hover:bg-cyan-500 hover:border-cyan-400'}`}
+                      >
+                        {playingUrl === song.preview ? (
+                          <div className="w-1.5 h-1.5 bg-white rounded-[1px]"></div>
+                        ) : (
+                          <svg className="w-2.5 h-2.5 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 ml-4">
+                  <p className="font-bold text-white truncate text-lg">{song.title}</p>
+                  <p className="text-xs text-slate-400 truncate font-medium uppercase tracking-wide">{song.artist}</p>
+                </div>
+
+              </div>
             ))}
           </div>
         </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
-        {/* Action: Create */}
-        <div className="glass-liquid p-6 rounded-3xl flex flex-col items-center text-center hover:bg-white/5 transition-all h-full min-h-[320px] justify-between animate-float-fast" style={{ animationDelay: '0s' }}>
-          <div className="flex flex-col items-center w-full">
-            <div className="w-20 h-20 bg-gradient-to-br from-fuchsia-500 to-purple-600 rounded-2xl rotate-3 flex items-center justify-center mb-4 text-white shadow-lg shadow-fuchsia-900/50 group-hover:rotate-6 transition-transform duration-300">
-              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-            </div>
-            <h3 className="text-3xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-white to-fuchsia-200">{t(lang, 'lobby.createTitle')}</h3>
-            <p className="text-slate-400 mb-4 font-medium">{t(lang, 'lobby.createDesc')}</p>
-
-            <div className="w-full mt-2">
-              <div
-                onClick={() => { setNoDuplicates(!noDuplicates); hapticClick(); }}
-                className={`w-full p-3 rounded-xl flex items-center gap-3 cursor-pointer transition-all elastic-active border ${noDuplicates ? 'bg-fuchsia-500/20 border-fuchsia-500' : 'bg-black/20 border-white/5 hover:bg-white/5'}`}
-              >
-                <div className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${noDuplicates ? 'bg-fuchsia-500 text-white' : 'bg-slate-700 text-slate-400'}`}>
-                  {noDuplicates && '✓'}
-                </div>
-                <div className="text-left flex-1">
-                  <p className={`text-sm font-bold ${noDuplicates ? 'text-white' : 'text-slate-400'}`}>{t(lang, 'lobby.modeNoDuplicates')}</p>
-                  <p className="text-[9px] text-slate-500 leading-tight">{t(lang, 'lobby.modeNoDuplicatesDesc')}</p>
-                </div>
-              </div>
-
-              {/* Grid Size Selector */}
-              <div className="w-full mt-4 bg-black/20 rounded-xl p-3">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 text-left ml-1">{t(lang, 'lobby.gridSize')}</p>
-                <div className="flex gap-2">
-                  {[3, 4, 5].map(size => (
-                    <button
-                      key={size}
-                      onClick={() => { setGridSize(size); hapticClick(); }}
-                      className={`flex-1 py-3 rounded-lg font-black text-sm transition-all elastic-active border ${gridSize === size ? 'bg-fuchsia-500 text-white border-fuchsia-400 shadow-[0_0_10px_rgba(217,70,239,0.5)]' : 'bg-transparent text-slate-500 border-white/10 hover:bg-white/5'}`}
-                    >
-                      {size}x{size}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={handleCreate}
-            disabled={loading}
-            className="w-full py-4 rounded-2xl font-bold bg-white text-fuchsia-900 hover:bg-fuchsia-50 shadow-xl elastic-active transition-all mt-4 text-lg"
-          >
-            {loading ? '...' : t(lang, 'lobby.btnCreate')}
-          </button>
-        </div>
-
-        {/* Action: Join - Harmonized Layout */}
-        <div className="glass-liquid p-6 rounded-3xl flex flex-col items-center text-center hover:bg-white/5 transition-all h-full min-h-[320px] justify-between animate-float-fast" style={{ animationDelay: '1.5s' }}>
-          <div className="flex flex-col items-center w-full">
-            <div className="w-20 h-20 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-2xl -rotate-3 flex items-center justify-center mb-4 text-white shadow-lg shadow-cyan-900/50 group-hover:-rotate-6 transition-transform duration-300">
-              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
-            </div>
-            <h3 className="text-3xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-white to-cyan-200">{t(lang, 'lobby.joinTitle')}</h3>
-            <p className="text-slate-400 mb-4 font-medium">{t(lang, 'lobby.joinDesc')}</p>
-          </div>
-
-          <div className="w-full mt-4">
-            {error && <p className="text-red-400 text-xs font-bold animate-bounce mb-2">{error}</p>}
-
-            <div className="w-full flex flex-col gap-4">
-              <input
-                type="text"
-                placeholder="ABCDEF"
-                className="w-full bg-black/20 text-white px-4 py-4 focus:outline-none uppercase font-mono tracking-[0.2em] text-center text-lg placeholder-slate-600 font-bold border border-white/10 rounded-2xl"
-                value={joinId}
-                onChange={(e) => {
-                  let val = e.target.value;
-                  // Smart Paste: Extract code from URL if present
-                  if (val.includes('game=')) {
-                    const match = val.match(/[?&]game=([^&]+)/);
-                    if (match && match[1]) val = match[1];
-                  }
-                  setJoinId(val.toUpperCase().trim());
-                  setError('');
-                }}
-              />
-              <button
-                onClick={() => handleJoin()}
-                disabled={loading || !joinId}
-                className="w-full py-4 rounded-2xl font-bold bg-cyan-500 text-slate-900 hover:bg-cyan-400 shadow-xl elastic-active transition-all text-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? '...' : t(lang, 'lobby.btnJoin')}
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
-
-      {/* Top Songs List */}
-      <div className="mt-12 w-full animate-pop delay-200">
-        <h3 className="text-lg font-black mb-4 text-slate-300 flex items-center gap-2 uppercase tracking-widest">
-          <span className="text-yellow-400 text-xl">★</span> {t(lang, 'lobby.leaderboard')}
-        </h3>
-        <div className="glass-liquid rounded-3xl overflow-hidden p-2 space-y-2">
-          {topSongs.length === 0 ? (
-            <div className="text-center p-8 text-slate-500 text-sm font-bold">En attente de données...</div>
-          ) : topSongs.map((song, i) => (
-            <div key={song.id} className="flex items-center p-3 rounded-2xl hover:bg-white/10 transition-colors group cursor-default">
-              <div className={`font-black text-xl w-10 h-10 flex items-center justify-center rounded-xl mr-3 shadow-inner ${i === 0 ? 'bg-yellow-400 text-yellow-900' : i === 1 ? 'bg-slate-300 text-slate-900' : i === 2 ? 'bg-amber-700 text-amber-100' : 'bg-slate-800 text-slate-500'}`}>
-                {i + 1}
-              </div>
-
-              <div className="relative w-12 h-12 shrink-0">
-                <img src={song.cover} className="w-full h-full rounded-xl shadow-md group-hover:scale-110 transition-transform duration-300 object-cover" alt="Cover" />
-                {song.preview && (
-                  <div className="absolute -bottom-2 -right-2 z-20">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); toggleAudio(song); }}
-                      className={`w-6 h-6 rounded-full flex items-center justify-center shadow-lg backdrop-blur-md border transition-all ${playingUrl === song.preview ? 'bg-cyan-500 border-cyan-400 text-white animate-pulse' : 'bg-black/60 border-white/20 text-white hover:bg-cyan-500 hover:border-cyan-400'}`}
-                    >
-                      {playingUrl === song.preview ? (
-                        <div className="w-1.5 h-1.5 bg-white rounded-[1px]"></div>
-                      ) : (
-                        <svg className="w-2.5 h-2.5 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div className="flex-1 min-w-0 ml-4">
-                <p className="font-bold text-white truncate text-lg">{song.title}</p>
-                <p className="text-xs text-slate-400 truncate font-medium uppercase tracking-wide">{song.artist}</p>
-              </div>
-
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
+    </div >
   );
 };
 

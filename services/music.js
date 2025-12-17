@@ -16,7 +16,7 @@ export const searchSongs = async (query) => {
     if (!response.ok) throw new Error('Network error');
 
     const data = await response.json();
-    console.log("Deezer Search Response:", data); // DEBUG: Inspect API result
+
     if (!data.data) return [];
 
     return data.data.map((track) => ({
@@ -48,7 +48,7 @@ export const getTrendingSongs = async () => {
     if (!response.ok) throw new Error('Network error');
 
     const data = await response.json();
-    console.log("Deezer Trending Response (Fresh):", data);
+
     if (!data.data) return FALLBACK_SONGS;
 
     const songs = data.data.map((track) => ({
@@ -70,9 +70,24 @@ export const getTrendingSongs = async () => {
   }
 };
 
-export const refreshSongUrl = async (songId) => {
+export const refreshSongUrl = async (songId, knownBadUrl = null) => {
   if (!songId) return null;
+
   try {
+    // 1. Check Global DB Cache first (optimistic check against other users' updates)
+    if (knownBadUrl) {
+      const { data: globalEntry } = await supabase
+        .from('global_songs')
+        .select('preview')
+        .eq('id', songId.toString())
+        .maybeSingle();
+
+      if (globalEntry && globalEntry.preview && globalEntry.preview !== knownBadUrl) {
+        return globalEntry.preview;
+      }
+    }
+
+    // 2. Fetch from Deezer API
     const response = await fetch(`${API_PROXY}?path=/track/${songId}`);
     if (!response.ok) throw new Error('Network error');
     const data = await response.json();

@@ -494,7 +494,6 @@ export const mergeGuestHistory = async (realUserId) => {
 
       // Clear local guest storage
       localStorage.removeItem(GUEST_HISTORY_KEY);
-      console.log(`Merged ${mergedGames.length} guest games into user profile.`);
     } else {
       console.warn("Merge history failed:", error);
     }
@@ -546,6 +545,7 @@ export const createGame = async (host, settings = {}) => {
     status: 'lobby',
     settings: {
       noDuplicates: settings.noDuplicates || false,
+      jokersEnabled: settings.jokersEnabled !== undefined ? settings.jokersEnabled : true,
       gridSize: gridSize // STORE IT
     },
     players: [{
