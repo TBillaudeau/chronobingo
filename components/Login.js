@@ -50,13 +50,23 @@ const Login = ({ lang, onLogin, initialCode }) => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[90vh] text-center px-4 relative overflow-hidden">
 
-      <div className="mb-8 animate-pop">
-        <h1 className="text-5xl md:text-8xl font-black text-white drop-shadow-[0_0_15px_rgba(217,70,239,0.5)] tracking-tighter">
+      <div className="mb-12 animate-pop relative z-10">
+        {/* Glow effect simplified */}
+        <div className="absolute inset-0 bg-fuchsia-500/20 blur-[50px] rounded-full mix-blend-screen"></div>
+
+        {/* Text FIXED: Solid white with neon shadow (removed text-transparent which caused visibility issues) */}
+        <h1 className="relative text-5xl md:text-7xl font-righteous text-white drop-shadow-[0_0_15px_rgba(217,70,239,0.8)] transform -rotate-2 pb-2">
           {renderTitle()}
         </h1>
+        <div className="absolute -bottom-4 right-0 rotate-[-4deg]">
+          <span className="bg-yellow-400 text-black text-xs md:text-sm font-black px-3 py-1 rounded-full shadow-xl border-2 border-white uppercase tracking-widest animate-bounce">
+            Party Game
+          </span>
+        </div>
       </div>
 
-      <p className="text-xl text-slate-300 mb-10 max-w-md font-light animate-pop delay-100">
+      {/* Subtitle constrained width */}
+      <p className="text-lg text-slate-300 mb-10 max-w-xs mx-auto font-light animate-pop delay-100 leading-tight">
         {t(lang, 'login.subtitle')}
       </p>
 

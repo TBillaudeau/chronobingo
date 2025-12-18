@@ -452,9 +452,10 @@ export const getGameHistory = async (userId) => {
       return Array.isArray(parsed) ? parsed : [];
     } catch (e) { return []; }
   }
-  // Real User - getUserProfile guarantees an array return
+  // Real User - getUserProfile guarantees an array return (theoretically)
+  // But we add a safety check just in case
   const profile = await getUserProfile(userId);
-  return profile.history;
+  return (profile && Array.isArray(profile.history)) ? profile.history : [];
 };
 
 // NEW: Merge Guest History into Real User Account
