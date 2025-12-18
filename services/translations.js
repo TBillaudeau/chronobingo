@@ -13,7 +13,7 @@ export const dictionary = {
       btnJoin: "Rejoindre la partie",
       or: "OU",
       btnGoogle: "Compte Google",
-      whyGoogle: "Pourquoi ce choix ?"
+      whyGoogle: "Pourquoi Google ou Spotify ?"
     },
     lobby: {
       hello: "Bonjour",
@@ -223,7 +223,7 @@ export const dictionary = {
       btnJoin: "Join Game",
       or: "OR",
       btnGoogle: "Google Account",
-      whyGoogle: "Why this choice?"
+      whyGoogle: "Why Google or Spotify?"
     },
     lobby: {
       hello: "Hello",

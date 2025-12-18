@@ -1,25 +1,39 @@
 
 import React, { useState } from 'react';
-import { loginWithGoogle } from '../services/gameService';
+import { loginWithGoogle, loginWithSpotify } from '../services/gameService';
 import { t } from '../services/translations';
 import { hapticClick } from '../services/haptics';
 
 const Login = ({ lang, onLogin, initialCode }) => {
   const [mode, setMode] = useState('menu'); // 'menu' | 'guest_input'
   const [name, setName] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [loadingMethod, setLoadingMethod] = useState(null); // 'google', 'spotify', 'guest', null
 
   // 1. Real Google Login
   const handleGoogleLogin = async () => {
+    if (loadingMethod) return;
     hapticClick();
-    setIsLoading(true);
+    setLoadingMethod('google');
     try {
       await loginWithGoogle();
       // Redirect will happen, MainGame handles the rest
     } catch (error) {
       console.error("Login failed", error);
-      setIsLoading(false);
+      setLoadingMethod(null);
       alert("Erreur de connexion Google");
+    }
+  };
+
+  const handleSpotifyLogin = async () => {
+    if (loadingMethod) return;
+    hapticClick();
+    setLoadingMethod('spotify');
+    try {
+      await loginWithSpotify();
+    } catch (error) {
+      console.error("Login failed", error);
+      setLoadingMethod(null);
+      alert("Erreur de connexion Spotify");
     }
   };
 
@@ -27,7 +41,7 @@ const Login = ({ lang, onLogin, initialCode }) => {
   const handleGuestSubmit = async () => {
     if (!name.trim()) return;
     hapticClick();
-    setIsLoading(true);
+    setLoadingMethod('guest');
 
     const guestUser = {
       id: 'guest-' + Math.random().toString(36).substr(2, 9),
@@ -77,15 +91,33 @@ const Login = ({ lang, onLogin, initialCode }) => {
             {/* Option A: Google (Persistent) */}
             <button
               onClick={handleGoogleLogin}
-              disabled={isLoading}
-              className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-4 px-6 rounded-2xl transition-all flex items-center justify-center gap-3 elastic-active shadow-xl group"
+              disabled={loadingMethod !== null}
+              className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-4 px-6 rounded-2xl transition-all flex items-center justify-center gap-3 elastic-active shadow-xl group disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {isLoading ? (
+              {loadingMethod === 'google' ? (
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-900"></div>
               ) : (
                 <>
                   <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-6 h-6" alt="G" />
                   <span className="text-lg">Connexion Google</span>
+                </>
+              )}
+            </button>
+
+            {/* Option B: Spotify */}
+            <button
+              onClick={handleSpotifyLogin}
+              disabled={loadingMethod !== null}
+              className="w-full bg-[#1DB954] hover:bg-[#1ed760] text-white font-bold py-4 px-6 rounded-2xl transition-all flex items-center justify-center gap-3 elastic-active shadow-xl group disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {loadingMethod === 'spotify' ? (
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+              ) : (
+                <>
+                  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141 4.32-1.38 9.841-.719 13.44 1.5.42.3.6.84.3 1.32zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 14.82 1.14.54.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.24z" />
+                  </svg>
+                  <span className="text-lg">Connexion Spotify</span>
                 </>
               )}
             </button>
@@ -102,7 +134,8 @@ const Login = ({ lang, onLogin, initialCode }) => {
             {/* Option B: Guest (Ephemeral) */}
             <button
               onClick={() => { hapticClick(); setMode('guest_input'); }}
-              className="w-full bg-slate-800/50 hover:bg-slate-800 text-slate-300 hover:text-white font-bold py-3 px-6 rounded-2xl transition-all elastic-active border border-white/10"
+              disabled={loadingMethod !== null}
+              className="w-full bg-slate-800/50 hover:bg-slate-800 text-slate-300 hover:text-white font-bold py-3 px-6 rounded-2xl transition-all elastic-active border border-white/10 disabled:opacity-70"
             >
               {t(lang, 'login.btnGuest')}
             </button>
@@ -130,30 +163,30 @@ const Login = ({ lang, onLogin, initialCode }) => {
 
             <button
               onClick={handleGuestSubmit}
-              disabled={!name.trim() || isLoading}
+              disabled={!name.trim() || loadingMethod !== null}
               className="w-full bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-[0_0_20px_rgba(192,38,211,0.4)] text-lg elastic-active disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? '...' : "C'est parti !"}
+              {loadingMethod === 'guest' ? '...' : "C'est parti !"}
             </button>
           </div>
         )}
 
       </div>
 
-      <div className="mt-8 text-[10px] text-slate-500 flex flex-col items-center gap-1 animate-pop delay-300">
-        <p>Music data provided by <a href="https://www.deezer.com" target="_blank" rel="noopener noreferrer" className="font-bold text-slate-400 hover:text-slate-300 transition-colors">Deezer</a></p>
-        <p>Avatars by <a href="https://dicebear.com" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">DiceBear</a> (CC BY 4.0)</p>
-        <p className="mt-2 text-[9px] opacity-70">
-          {lang === 'fr' ? "Tes données (ID, prénom, avatar) sont utilisées uniquement pour l'identification et le jeu." : "Your data (ID, first name, avatar) is used solely for authentication and gameplay."}
-          <span className="mx-1">•</span>
-          <a href="/privacy" className="underline hover:text-slate-300 transition-colors">
+      <div className="mt-8 flex flex-col items-center animate-pop delay-300">
+        <a href="/privacy" className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-colors border border-white/10 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          {t(lang, 'login.whyGoogle')}
+        </a>
+
+        <div className="text-slate-500 flex flex-col items-center gap-2 mt-8">
+          <a href="/privacy" className="text-sm font-bold text-slate-400 hover:text-white transition-colors">
             {lang === 'fr' ? "Politique de Confidentialité" : "Privacy Policy"}
           </a>
-          <span className="mx-1">•</span>
-          <a href="/why-google" className="underline hover:text-slate-300 transition-colors">
-            {t(lang, 'login.whyGoogle')}
-          </a>
-        </p>
+          <p className="text-[10px] opacity-50 px-4 max-w-md font-medium">
+            {lang === 'fr' ? "Tes données (ID, prénom, avatar) sont utilisées uniquement pour l'identification et le jeu." : "Your data (ID, first name, avatar) is used solely for authentication and gameplay."}
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -117,14 +117,14 @@ const Profile = ({
 
     const handleLogout = async () => {
         await logoutUser();
-        window.location.reload();
+        onLogout();
     };
 
     const handleDeleteAccount = async () => {
         if (window.confirm(t(lang, 'profile.deleteConfirm'))) {
             try {
                 await deleteUserAccount(user.id);
-                window.location.reload();
+                onLogout();
             } catch (error) {
                 console.error("Delete Account Error:", error);
                 alert("Error deleting account: " + (error.message || "Unknown error"));
@@ -560,7 +560,7 @@ const Profile = ({
                                             <span>👨‍💻</span> {t(lang, 'profile.github')} <a href="https://github.com/TBillaudeau/chronobingo" target="_blank" rel="noopener noreferrer" className="text-white font-bold hover:underline">GitHub</a>
                                         </p>
                                         <p className="flex items-center gap-2 pt-2 border-t border-white/5">
-                                            <span>ℹ️</span> <a href="/why-google" className="text-fuchsia-400 hover:text-fuchsia-300 hover:underline">{t(lang, 'login.whyGoogle')}</a>
+                                            <span>ℹ️</span> <a href="/privacy" className="text-fuchsia-400 hover:text-fuchsia-300 hover:underline">{t(lang, 'login.whyGoogle')}</a>
                                         </p>
                                     </div>
                                 </div>

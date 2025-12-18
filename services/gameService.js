@@ -27,6 +27,7 @@ export const removeLocalUser = () => {
 };
 
 // Real Google Login
+// Real Google Login
 export const loginWithGoogle = async () => {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
@@ -36,6 +37,19 @@ export const loginWithGoogle = async () => {
         access_type: 'offline',
         prompt: 'consent',
       },
+    },
+  });
+  if (error) throw error;
+  return data;
+};
+
+// Real Spotify Login
+export const loginWithSpotify = async () => {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'spotify',
+    options: {
+      redirectTo: window.location.origin,
+      // Spotify specific scopes if needed, usually default ones are enough for auth
     },
   });
   if (error) throw error;
@@ -87,9 +101,9 @@ export const getUserProfile = async (userId) => {
   // Ensure arrays are not null even if DB returns null
   return {
     ...data,
-    favorites: data?.favorites || [],
-    history: data?.history || [],
-    achievements: data?.achievements || [],
+    favorites: Array.isArray(data?.favorites) ? data.favorites : [],
+    history: Array.isArray(data?.history) ? data.history : [],
+    achievements: Array.isArray(data?.achievements) ? data.achievements : [],
     stats: data?.stats || { games_played: 0, games_won: 0, songs_chosen: 0, bingos: 0 },
     song_stats: data?.song_stats || {}
   };
@@ -328,7 +342,7 @@ const addToHistory = async (game, userId, overrides = {}) => {
     } catch (e) { }
   } else {
     const profile = await getUserProfile(userId);
-    history = profile.history || [];
+    history = (profile && Array.isArray(profile.history)) ? profile.history : [];
   }
 
   const existingEntry = history.find(h => h.id === game.id);
