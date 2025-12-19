@@ -28,7 +28,7 @@ const StarryBackground = ({ mode = 'light' }) => {
   }, []);
 
   return (
-    <div className={`absolute inset-0 w-full h-full min-h-screen z-0 overflow-hidden pointer-events-none ${mode === 'dark' ? 'bg-black' : 'bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900'}`}>
+    <div className={`fixed inset-0 w-full h-full min-h-screen z-0 overflow-hidden pointer-events-none ${mode === 'dark' ? 'bg-black' : 'bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900'}`}>
       <div ref={containerRef} className="absolute inset-0 opacity-50"></div>
 
       {/* Disco Lights effect - Only in Light Mode */}
