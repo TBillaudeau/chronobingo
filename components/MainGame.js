@@ -201,6 +201,13 @@ const MainGame = () => {
     if (!userData.isGuest) {
       // Logic inside handles empty guest history gracefully
       await mergeGuestHistory(userData.id);
+
+      // Ask for notifications on manual login (if not guest)
+      if (isManual) {
+        import('../services/notifications').then(({ requestNotificationPermission }) => {
+          requestNotificationPermission();
+        });
+      }
     }
 
     // Handle Pending Actions (Create/Join after login)
@@ -210,8 +217,17 @@ const MainGame = () => {
           allowLateJoin: true,
           noDuplicates: pendingAction.noDuplicates,
           jokersEnabled: pendingAction.jokersEnabled,
+          jokersEnabled: pendingAction.jokersEnabled,
           gridSize: pendingAction.gridSize
         });
+
+        // Auto-Enable Notifications for Host (Real users only)
+        if (!userData.isGuest) {
+          import('../services/notifications').then(({ requestNotificationPermission }) => {
+            requestNotificationPermission();
+          });
+        }
+
         setActiveGame(game);
         setView(VIEW.GAME_ROOM);
         updateUrl(VIEW.GAME_ROOM, game.id);
@@ -381,6 +397,7 @@ const MainGame = () => {
               }
             }}
             onLogout={handleLogout}
+            onRequestLogin={handleRequestLogin}
             onLanguageChange={handleLangChange}
             onRejoinGame={async (gameId) => {
               // Determine if guest or user

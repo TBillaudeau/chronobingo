@@ -113,10 +113,10 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
   };
 
   return (
-    <div className="flex flex-col items-center w-full max-w-4xl mx-auto pb-12 animate-pop">
+    <div className="flex flex-col items-center w-full max-w-4xl mx-auto pb-4 animate-pop">
 
       {/* Sticky Header Wrapper */}
-      <header className="sticky z-40 w-full px-4 mb-8 transition-all top-[calc(1rem+env(safe-area-inset-top))] md:top-4">
+      <header className="relative z-40 w-full px-4 mb-6 mt-[calc(1rem+env(safe-area-inset-top))] md:mt-4 transition-all">
         {user ? (
           user.isGuest ? (
             /* Guest Banner */
@@ -135,12 +135,7 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleGuestConnect(); }}
-                    className="px-4 py-2 bg-fuchsia-600 text-white text-xs font-black rounded-xl hover:bg-fuchsia-500 transition-colors shadow-lg"
-                  >
-                    {t(lang, 'lobby.guestLogin')}
-                  </button>
+
                   <div className="w-10 h-10 shrink-0 aspect-square bg-white/10 rounded-xl flex items-center justify-center group-hover:bg-white/20 transition-colors text-white">
                     ⚙️
                   </div>
@@ -155,7 +150,7 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
                 <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 bg-green-500"></div>
               </div>
               <div className="flex-1">
-                <h2 className="text-2xl font-black text-white tracking-tight">{t(lang, 'lobby.hello')}, {user.name} !</h2>
+                <h2 className="text-2xl font-black text-white tracking-tight truncate max-w-[200px]">{user.name}</h2>
                 <p className="text-fuchsia-300 text-sm font-medium">{t(lang, 'profile.vipRole')}</p>
               </div>
               <div className="w-12 h-12 shrink-0 aspect-square bg-white/10 rounded-full flex items-center justify-center group-hover:bg-white/20 transition-colors">

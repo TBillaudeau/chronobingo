@@ -49,7 +49,7 @@ const Login = ({ lang, onLogin, initialCode, onBack }) => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[100dvh] text-center px-4 py-8 relative overflow-hidden pt-[calc(3rem+env(safe-area-inset-top))] md:pt-12">
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] text-center px-4 py-8 relative overflow-hidden pt-[calc(2rem+env(safe-area-inset-top))] md:pt-12">
 
       {onBack && (
         <button

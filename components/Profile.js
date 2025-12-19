@@ -14,6 +14,7 @@ const Profile = ({
     lang,
     onBack,
     onLogout,
+    onRequestLogin,
     onLanguageChange,
     onRejoinGame,
     themeMode = 'system',
@@ -142,7 +143,7 @@ const Profile = ({
     };
 
     return (
-        <div className="w-full max-w-2xl mx-auto pb-20 min-h-screen flex flex-col animate-pop pt-4 md:pt-8">
+        <div className="w-full max-w-2xl mx-auto pb-4 min-h-screen flex flex-col animate-pop pt-[calc(1rem+env(safe-area-inset-top))] md:pt-8">
 
             <header className="relative z-40 mx-4 mb-4 p-3 rounded-3xl glass-liquid flex items-center gap-4 transition-all shadow-lg border border-white/10 bg-black/40 backdrop-blur-xl">
                 <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/20 transition-colors elastic-active">
@@ -174,7 +175,10 @@ const Profile = ({
                     </div>
 
                     {user.isGuest ? (
-                        <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl text-center">
+                        <div
+                            onClick={onRequestLogin}
+                            className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl text-center cursor-pointer hover:bg-yellow-500/20 active:scale-95 transition-all"
+                        >
                             <p className="text-yellow-200 font-bold text-sm">{t(lang, 'profile.connectForStats')}</p>
                         </div>
                     ) : (

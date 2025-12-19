@@ -26,35 +26,31 @@ export const removeLocalUser = () => {
   }
 };
 
-// Real Google Login
-// Real Google Login
-export const loginWithGoogle = async () => {
+// Generic OAuth Login
+export const loginWithProvider = async (provider) => {
+  const options = {
+    redirectTo: window.location.origin,
+  };
+
+  if (provider === 'google') {
+    options.queryParams = {
+      access_type: 'offline',
+      prompt: 'consent',
+    };
+  }
+
   const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: window.location.origin,
-      queryParams: {
-        access_type: 'offline',
-        prompt: 'consent',
-      },
-    },
+    provider,
+    options,
   });
+
   if (error) throw error;
   return data;
 };
 
-// Real Spotify Login
-export const loginWithSpotify = async () => {
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'spotify',
-    options: {
-      redirectTo: window.location.origin,
-      // Spotify specific scopes if needed, usually default ones are enough for auth
-    },
-  });
-  if (error) throw error;
-  return data;
-};
+// Backwards compatibility wrappers (optional, can be removed if all calls are updated)
+export const loginWithGoogle = () => loginWithProvider('google');
+export const loginWithSpotify = () => loginWithProvider('spotify');
 
 // Sync user to DB (Upsert) - Data Minimization: Only ID, Name, Avatar
 export const saveUserToDb = async (user) => {
