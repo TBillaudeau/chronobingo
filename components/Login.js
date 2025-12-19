@@ -4,7 +4,7 @@ import { loginWithGoogle, loginWithSpotify } from '../services/gameService';
 import { t } from '../services/translations';
 import { hapticClick } from '../services/haptics';
 
-const Login = ({ lang, onLogin, initialCode }) => {
+const Login = ({ lang, onLogin, initialCode, onBack }) => {
   const [mode, setMode] = useState('menu'); // 'menu' | 'guest_input'
   const [name, setName] = useState('');
   const [loadingMethod, setLoadingMethod] = useState(null); // 'google', 'spotify', 'guest', null
@@ -62,7 +62,18 @@ const Login = ({ lang, onLogin, initialCode }) => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[90vh] text-center px-4 relative overflow-hidden">
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] text-center px-4 py-8 relative overflow-hidden supports-[padding-top:env(safe-area-inset-top)]:pt-[env(safe-area-inset-top)]">
+
+      {onBack && (
+        <button
+          onClick={() => { hapticClick(); onBack(); }}
+          className="absolute top-12 left-6 z-50 p-2 text-white/50 hover:text-white transition-colors rounded-full hover:bg-white/10"
+        >
+          <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+        </button>
+      )}
 
       <div className="mb-12 animate-pop relative z-10">
         {/* Glow effect simplified */}
@@ -174,10 +185,6 @@ const Login = ({ lang, onLogin, initialCode }) => {
       </div>
 
       <div className="mt-8 flex flex-col items-center animate-pop delay-300">
-        <a href="/privacy" className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-colors border border-white/10 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-          {t(lang, 'login.whyGoogle')}
-        </a>
 
         <div className="text-slate-500 flex flex-col items-center gap-2 mt-8">
           <a href="/privacy" className="text-sm font-bold text-slate-400 hover:text-white transition-colors">

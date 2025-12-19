@@ -322,7 +322,7 @@ const MainGame = () => {
   }
 
   return (
-    <div className={`min-h-screen text-white relative overflow-hidden transition-colors duration-500
+    <div className={`flex flex-col min-h-[100dvh] text-white relative transition-colors duration-500
       ${effectiveTheme === 'dark' ? 'bg-black' : ''} 
       ${effectiveTheme === 'eco' ? 'bg-black grayscale' : ''}
       ${effectiveTheme === 'light' ? '' : ''}
@@ -331,7 +331,12 @@ const MainGame = () => {
       <InstallPrompt lang={lang} />
       <main className="relative z-10">
         {view === VIEW.LOGIN && (
-          <Login lang={lang} onLogin={handleGuestLogin} initialCode={initialGameCode} />
+          <Login
+            lang={lang}
+            onLogin={handleGuestLogin}
+            initialCode={initialGameCode}
+            onBack={() => setView(VIEW.LOBBY)}
+          />
         )}
 
         {view === VIEW.LOBBY && (

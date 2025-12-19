@@ -559,9 +559,7 @@ const Profile = ({
                                         <p className="flex items-center gap-2 pt-2 border-t border-white/5">
                                             <span>👨‍💻</span> {t(lang, 'profile.github')} <a href="https://github.com/TBillaudeau/chronobingo" target="_blank" rel="noopener noreferrer" className="text-white font-bold hover:underline">GitHub</a>
                                         </p>
-                                        <p className="flex items-center gap-2 pt-2 border-t border-white/5">
-                                            <span>ℹ️</span> <a href="/privacy" className="text-fuchsia-400 hover:text-fuchsia-300 hover:underline">{t(lang, 'login.whyGoogle')}</a>
-                                        </p>
+
                                     </div>
                                 </div>
                             </div>
