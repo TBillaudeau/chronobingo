@@ -153,35 +153,20 @@ export default function PrivacyPolicy() {
                     <p>{t.secAuthIntro}</p>
                 </section>
 
-                <section className="space-y-2">
-                    <h2 className="text-2xl font-bold text-white">{t.sec1Title}</h2>
-                    <p>{t.sec1Desc}</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                        <li>{t.sec1Li1}</li>
-                        <li>{t.sec1Li2}</li>
-                    </ul>
-                </section>
-
-                <section className="space-y-2">
-                    <h2 className="text-2xl font-bold text-white">{t.sec2Title}</h2>
-                    <p>{t.sec2Desc}</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                        <li>{t.sec2Li1}</li>
-                        <li>{t.sec2Li2}</li>
-                        <li>{t.sec2Li3}</li>
-                    </ul>
-                    <p className="font-bold text-white mt-2">{t.sec2Bold}</p>
-                </section>
-
-                <section className="space-y-2">
-                    <h2 className="text-2xl font-bold text-white">{t.sec3Title}</h2>
-                    <p>{t.sec3Desc}</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                        <li>{t.sec3Li1}</li>
-                        <li>{t.sec3Li2}</li>
-                        <li>{t.sec3Li3}</li>
-                    </ul>
-                </section>
+                {[
+                    { t: 'sec1Title', d: 'sec1Desc', l: ['sec1Li1', 'sec1Li2'] },
+                    { t: 'sec2Title', d: 'sec2Desc', l: ['sec2Li1', 'sec2Li2', 'sec2Li3'], b: 'sec2Bold' },
+                    { t: 'sec3Title', d: 'sec3Desc', l: ['sec3Li1', 'sec3Li2', 'sec3Li3'] }
+                ].map((s, i) => (
+                    <section key={i} className="space-y-2">
+                        <h2 className="text-2xl font-bold text-white">{t[s.t]}</h2>
+                        <p>{t[s.d]}</p>
+                        <ul className="list-disc pl-5 space-y-1">
+                            {s.l.map((li, j) => <li key={j}>{t[li]}</li>)}
+                        </ul>
+                        {s.b && <p className="font-bold text-white mt-2">{t[s.b]}</p>}
+                    </section>
+                ))}
 
                 <section className="space-y-2">
                     <h2 className="text-2xl font-bold text-white">{t.sec4Title}</h2>

@@ -142,9 +142,9 @@ const Profile = ({
     };
 
     return (
-        <div className="w-full max-w-2xl mx-auto pb-20 min-h-screen flex flex-col animate-pop">
+        <div className="w-full max-w-2xl mx-auto pb-20 min-h-screen flex flex-col animate-pop pt-4 md:pt-8">
 
-            <header className="sticky top-4 z-40 mx-4 mb-8 p-3 rounded-3xl glass-liquid flex items-center gap-4 transition-all shadow-lg border border-white/10 bg-black/40 backdrop-blur-xl">
+            <header className="relative z-40 mx-4 mb-4 p-3 rounded-3xl glass-liquid flex items-center gap-4 transition-all shadow-lg border border-white/10 bg-black/40 backdrop-blur-xl">
                 <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/20 transition-colors elastic-active">
                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
                 </button>
@@ -180,18 +180,16 @@ const Profile = ({
                     ) : (
                         stats && (
                             <div className="grid grid-cols-3 gap-2 mt-4">
-                                <div className="bg-black/30 p-3 rounded-xl text-center">
-                                    <p className="text-xs text-slate-400 uppercase font-bold">{t(lang, 'profile.statGames')}</p>
-                                    <p className="text-xl font-black text-white">{stats.games_played}</p>
-                                </div>
-                                <div className="bg-black/30 p-3 rounded-xl text-center">
-                                    <p className="text-xs text-slate-400 uppercase font-bold">{t(lang, 'profile.statWins')}</p>
-                                    <p className="text-xl font-black text-yellow-400">{stats.games_won}</p>
-                                </div>
-                                <div className="bg-black/30 p-3 rounded-xl text-center">
-                                    <p className="text-xs text-slate-400 uppercase font-bold">{t(lang, 'profile.statRatio')}</p>
-                                    <p className="text-xl font-black text-cyan-400">{ratio}%</p>
-                                </div>
+                                {[
+                                    { l: 'profile.statGames', v: stats.games_played, c: 'text-white' },
+                                    { l: 'profile.statWins', v: stats.games_won, c: 'text-yellow-400' },
+                                    { l: 'profile.statRatio', v: ratio + '%', c: 'text-cyan-400' }
+                                ].map((item, i) => (
+                                    <div key={i} className="bg-black/30 p-3 rounded-xl text-center">
+                                        <p className="text-xs text-slate-400 uppercase font-bold">{t(lang, item.l)}</p>
+                                        <p className={`text-xl font-black ${item.c}`}>{item.v}</p>
+                                    </div>
+                                ))}
                             </div>
                         )
                     )}
@@ -201,73 +199,45 @@ const Profile = ({
                     <div className="mb-8 space-y-4">
                         <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-2">{t(lang, 'profile.topsFlops')}</h3>
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="glass-liquid p-4 rounded-2xl bg-emerald-500/5 border-emerald-500/20">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
-                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                            {[
+                                { title: 'profile.tops', data: bestSongs, icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6', color: 'emerald', text: 'emerald-400' },
+                                { title: 'profile.flops', data: worstSongs, icon: 'M13 17h8m0 0V9m0 8l-8-8-4 4-6-6', color: 'red', text: 'red-500' }
+                            ].map((s, i) => (
+                                <div key={i} className={`glass-liquid p-4 rounded-2xl bg-${s.color}-500/5 border-${s.color}-500/20`}>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className={`w-6 h-6 rounded-full bg-${s.color}-500/20 flex items-center justify-center text-${s.text}`}>
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d={s.icon} /></svg>
+                                        </div>
+                                        <p className={`text-${s.text} font-black text-sm`}>{t(lang, s.title)}</p>
                                     </div>
-                                    <p className="text-emerald-400 font-black text-sm">{t(lang, 'profile.tops')}</p>
+                                    {s.data.map(track => (
+                                        <div key={track.id} className="text-xs mb-1">
+                                            <span className="text-white font-bold block truncate">{track.title}</span>
+                                            <span className={`text-${s.text} font-mono`}>{(track.successRate * 100).toFixed(0)}% {t(lang, 'profile.winRate')}</span>
+                                        </div>
+                                    ))}
                                 </div>
-                                {bestSongs.map(s => (
-                                    <div key={s.id} className="text-xs mb-1">
-                                        <span className="text-white font-bold block truncate">{s.title}</span>
-                                        <span className="text-emerald-500 font-mono">{(s.successRate * 100).toFixed(0)}% {t(lang, 'profile.winRate')}</span>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="glass-liquid p-4 rounded-2xl bg-red-500/5 border-red-500/20">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <div className="w-6 h-6 rounded-full bg-red-500/20 flex items-center justify-center text-red-500">
-                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" /></svg>
-                                    </div>
-                                    <p className="text-red-400 font-black text-sm">{t(lang, 'profile.flops')}</p>
-                                </div>
-                                {worstSongs.map(s => (
-                                    <div key={s.id} className="text-xs mb-1">
-                                        <span className="text-white font-bold block truncate">{s.title}</span>
-                                        <span className="text-red-500 font-mono">{(s.successRate * 100).toFixed(0)}% {t(lang, 'profile.winRate')}</span>
-                                    </div>
-                                ))}
-                            </div>
+                            ))}
                         </div>
                     </div>
                 )}
 
                 <div className="flex p-1.5 bg-slate-900/60 backdrop-blur-md rounded-2xl mb-8 border border-white/10 gap-1 overflow-x-auto">
-                    <button
-                        onClick={() => setActiveTab('history')}
-                        className={`flex-1 min-w-[60px] py-3 rounded-xl transition-all elastic-active flex flex-col items-center justify-center gap-1 ${activeTab === 'history' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        <span className="text-[10px] font-black uppercase tracking-wider hidden sm:block">{t(lang, 'profile.tabHistory')}</span>
-                    </button>
-
-                    {!user.isGuest && (
-                        <>
-                            <button
-                                onClick={() => setActiveTab('achievements')}
-                                className={`flex-1 min-w-[60px] py-3 rounded-xl transition-all elastic-active flex flex-col items-center justify-center gap-1 ${activeTab === 'achievements' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
-                                <span className="text-[10px] font-black uppercase tracking-wider hidden sm:block">{t(lang, 'lobby.achievements')}</span>
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('favorites')}
-                                className={`flex-1 min-w-[60px] py-3 rounded-xl transition-all elastic-active flex flex-col items-center justify-center gap-1 ${activeTab === 'favorites' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
-                                <span className="text-[10px] font-black uppercase tracking-wider hidden sm:block">{t(lang, 'profile.tabFavs')}</span>
-                            </button>
-                        </>
-                    )}
-
-                    <button
-                        onClick={() => setActiveTab('settings')}
-                        className={`flex-1 min-w-[60px] py-3 rounded-xl transition-all elastic-active flex flex-col items-center justify-center gap-1 ${activeTab === 'settings' ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                        <span className="text-[10px] font-black uppercase tracking-wider hidden sm:block">{t(lang, 'profile.tabSettings')}</span>
-                    </button>
+                    {[
+                        { id: 'history', label: 'profile.tabHistory', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+                        { id: 'achievements', label: 'lobby.achievements', icon: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z', hide: user.isGuest },
+                        { id: 'favorites', label: 'profile.tabFavs', icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z', hide: user.isGuest },
+                        { id: 'settings', label: 'profile.tabSettings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
+                    ].filter(t => !t.hide).map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`flex-1 min-w-[60px] py-3 rounded-xl transition-all elastic-active flex flex-col items-center justify-center gap-1 ${activeTab === tab.id ? 'bg-fuchsia-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={tab.icon} /></svg>
+                            <span className="text-[10px] font-black uppercase tracking-wider hidden sm:block">{t(lang, tab.label)}</span>
+                        </button>
+                    ))}
                 </div>
 
                 <div className="flex-1 animate-pop delay-100">

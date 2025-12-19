@@ -116,7 +116,7 @@ const GameLobby = ({ user, lang, activeGame, onJoinGame, onNavigateToProfile, on
     <div className="flex flex-col items-center w-full max-w-4xl mx-auto pb-12 animate-pop">
 
       {/* Sticky Header Wrapper */}
-      <header className="sticky top-4 z-40 w-full px-4 mb-8 transition-all">
+      <header className="sticky z-40 w-full px-4 mb-8 transition-all top-[calc(1rem+env(safe-area-inset-top))] md:top-4">
         {user ? (
           user.isGuest ? (
             /* Guest Banner */

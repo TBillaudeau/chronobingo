@@ -206,7 +206,12 @@ const MainGame = () => {
     // Handle Pending Actions (Create/Join after login)
     if (pendingAction) {
       if (pendingAction.type === 'create') {
-        const game = await createGame(userData, { allowLateJoin: true, noDuplicates: pendingAction.noDuplicates });
+        const game = await createGame(userData, {
+          allowLateJoin: true,
+          noDuplicates: pendingAction.noDuplicates,
+          jokersEnabled: pendingAction.jokersEnabled,
+          gridSize: pendingAction.gridSize
+        });
         setActiveGame(game);
         setView(VIEW.GAME_ROOM);
         updateUrl(VIEW.GAME_ROOM, game.id);

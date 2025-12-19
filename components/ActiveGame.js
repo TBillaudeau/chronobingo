@@ -1032,8 +1032,21 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
 
             {/* Tabs */}
             < div className="flex px-4 mb-4 gap-3" >
-                <button onClick={() => switchTab('grid')} className={`flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all elastic-active ${tab === 'grid' ? 'bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white shadow-lg ring-2 ring-fuchsia-400/50' : 'bg-slate-800 text-slate-400'}`}>{t(lang, 'game.tabGrid')}</button>
-                <button onClick={() => switchTab('players')} className={`flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all elastic-active ${tab === 'players' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg ring-2 ring-cyan-400/50' : 'bg-slate-800 text-slate-400'}`}>{t(lang, 'game.tabPlayers')} <span className="bg-black/30 px-1.5 py-0.5 rounded-md ml-1">{game.players.length}</span></button>
+                {[
+                    { id: 'grid', label: 'game.tabGrid', color: 'fuchsia' },
+                    { id: 'players', label: 'game.tabPlayers', color: 'cyan', count: game.players.length }
+                ].map(tObj => (
+                    <button
+                        key={tObj.id}
+                        onClick={() => switchTab(tObj.id)}
+                        className={`flex-1 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all elastic-active ${tab === tObj.id
+                            ? `bg-gradient-to-r from-${tObj.color}-600 to-${tObj.color === 'cyan' ? 'blue' : 'purple'}-600 text-white shadow-lg ring-2 ring-${tObj.color}-400/50`
+                            : 'bg-slate-800 text-slate-400'}`}
+                    >
+                        {t(lang, tObj.label)}
+                        {tObj.count !== undefined && <span className="bg-black/30 px-1.5 py-0.5 rounded-md ml-1">{tObj.count}</span>}
+                    </button>
+                ))}
             </div >
 
             {/* PREPARATION MODE SWITCH (Only if grid not locked) */}
@@ -1041,18 +1054,33 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                 tab === 'grid' && !isMyGridLocked && (
                     <div className="px-4 mb-4">
                         <div className="glass-liquid p-1 rounded-xl flex">
-                            <button onClick={() => { setIsMoveMode(false); setMoveSourceIndex(null); hapticClick(); }} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${!isMoveMode ? 'bg-white text-slate-900' : 'text-slate-400'}`}>
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                    <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                                </svg>
-                                {t(lang, 'game.btnAdd')}
-                            </button>
-                            <button onClick={() => { setIsMoveMode(true); hapticClick(); }} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${isMoveMode ? 'bg-cyan-400 text-slate-900' : 'text-slate-400'}`}>
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                                    <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0v2.433l-.312-.312a7 7 0 00-11.712 3.138.75.75 0 001.449.39 5.5 5.5 0 019.201-2.466l.312.312h-2.433a.75.75 0 000 1.5h4.242a.75.75 0 00.53-.219z" clipRule="evenodd" />
-                                </svg>
-                                {t(lang, 'game.btnReorder')}
-                            </button>
+                            {[
+                                {
+                                    mode: false,
+                                    label: 'game.btnAdd',
+                                    icon: <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />,
+                                    activeClass: 'bg-white text-slate-900',
+                                    inactiveClass: 'text-slate-400'
+                                },
+                                {
+                                    mode: true,
+                                    label: 'game.btnReorder',
+                                    icon: <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0v2.433l-.312-.312a7 7 0 00-11.712 3.138.75.75 0 001.449.39 5.5 5.5 0 019.201-2.466l.312.312h-2.433a.75.75 0 000 1.5h4.242a.75.75 0 00.53-.219z" clipRule="evenodd" />,
+                                    activeClass: 'bg-cyan-400 text-slate-900',
+                                    inactiveClass: 'text-slate-400'
+                                }
+                            ].map((btn, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => { setIsMoveMode(btn.mode); if (!btn.mode) setMoveSourceIndex(null); hapticClick(); }}
+                                    className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${isMoveMode === btn.mode ? btn.activeClass : btn.inactiveClass}`}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                        {btn.icon}
+                                    </svg>
+                                    {t(lang, btn.label)}
+                                </button>
+                            ))}
                         </div>
                         {isMoveMode && <p className="text-center text-[10px] text-cyan-300 mt-2 animate-pulse font-bold">Tap a song, then tap another to swap!</p>}
                     </div>
@@ -1271,42 +1299,23 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
                                 )}
 
                                 <div className="glass-liquid rounded-3xl p-3 flex gap-2 justify-center w-full border border-white/10 shadow-[0_0_20px_rgba(0,0,0,0.3)]">
-                                    {isFrozen && (
+                                    {[
+                                        { active: isFrozen, title: 'jokers.frozen', desc: 'jokers.frozenDesc', color: 'bg-cyan-500 text-white border-cyan-400', icon: '🧊', time: frozenUntil },
+                                        { active: isBlinded, title: 'jokers.blinded', desc: 'jokers.blindedDesc', color: 'bg-slate-800 text-white border-slate-600', icon: '🌓', time: blindedUntil },
+                                        { active: isProtected, title: 'jokers.protected', desc: 'jokers.protectedDesc', color: 'bg-emerald-500 text-slate-900 border-emerald-400', icon: '🛡️', time: protectedUntil }
+                                    ].filter(e => e.active).map((effect, i) => (
                                         <div
-                                            onClick={() => setSelectedEffectInfo({ title: t(lang, 'jokers.frozen'), desc: t(lang, 'jokers.frozenDesc'), color: 'bg-cyan-500 text-white border-cyan-400' })}
-                                            className="bg-cyan-500/90 text-white text-[9px] font-black px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-lg animate-pulse whitespace-nowrap border border-cyan-300 cursor-help active:scale-95 transition-transform"
+                                            key={i}
+                                            onClick={() => setSelectedEffectInfo({ title: t(lang, effect.title), desc: t(lang, effect.desc), color: effect.color })}
+                                            className={`${effect.color.split(' ')[0]} ${effect.color.split(' ')[1]} text-[9px] font-black px-3 py-1.5 rounded-xl flex items-center gap-2 border ${effect.color.split(' ').pop()} shadow-lg whitespace-nowrap cursor-help active:scale-95 transition-transform ${effect.title === 'jokers.frozen' ? 'animate-pulse' : ''}`}
                                         >
-                                            <span className="text-sm">🧊</span>
+                                            <span className="text-sm">{effect.icon}</span>
                                             <div className="flex flex-col leading-none">
-                                                <span>{t(lang, 'jokers.frozen')}</span>
-                                                <span className="opacity-80 text-[8px]">{formatTime(frozenUntil - now)}</span>
+                                                <span>{t(lang, effect.title)}</span>
+                                                <span className="opacity-80 text-[8px]">{formatTime(effect.time - now)}</span>
                                             </div>
                                         </div>
-                                    )}
-                                    {isBlinded && (
-                                        <div
-                                            onClick={() => setSelectedEffectInfo({ title: t(lang, 'jokers.blinded'), desc: t(lang, 'jokers.blindedDesc'), color: 'bg-slate-800 text-white border-slate-600' })}
-                                            className="bg-slate-800 text-white text-[9px] font-black px-3 py-1.5 rounded-xl flex items-center gap-2 border border-slate-600 shadow-lg whitespace-nowrap cursor-help active:scale-95 transition-transform"
-                                        >
-                                            <span className="text-sm">🌓</span>
-                                            <div className="flex flex-col leading-none">
-                                                <span>{t(lang, 'jokers.blinded')}</span>
-                                                <span className="opacity-80 text-[8px]">{formatTime(blindedUntil - now)}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {isProtected && (
-                                        <div
-                                            onClick={() => setSelectedEffectInfo({ title: t(lang, 'jokers.protected'), desc: t(lang, 'jokers.protectedDesc'), color: 'bg-emerald-500 text-slate-900 border-emerald-400' })}
-                                            className="bg-emerald-500 text-slate-900 text-[9px] font-black px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-lg whitespace-nowrap border border-emerald-300 cursor-help active:scale-95 transition-transform"
-                                        >
-                                            <span className="text-sm">🛡️</span>
-                                            <div className="flex flex-col leading-none">
-                                                <span>{t(lang, 'jokers.protected')}</span>
-                                                <span className="opacity-80 text-[8px]">{formatTime(protectedUntil - now)}</span>
-                                            </div>
-                                        </div>
-                                    )}
+                                    ))}
                                 </div>
                             </div>
                         )}

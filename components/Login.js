@@ -9,31 +9,18 @@ const Login = ({ lang, onLogin, initialCode, onBack }) => {
   const [name, setName] = useState('');
   const [loadingMethod, setLoadingMethod] = useState(null); // 'google', 'spotify', 'guest', null
 
-  // 1. Real Google Login
-  const handleGoogleLogin = async () => {
+  // 1. Generic OAuth Login
+  const handleOAuth = async (provider) => {
     if (loadingMethod) return;
     hapticClick();
-    setLoadingMethod('google');
+    setLoadingMethod(provider);
     try {
-      await loginWithGoogle();
-      // Redirect will happen, MainGame handles the rest
+      if (provider === 'google') await loginWithGoogle();
+      else if (provider === 'spotify') await loginWithSpotify();
     } catch (error) {
       console.error("Login failed", error);
       setLoadingMethod(null);
-      alert("Erreur de connexion Google");
-    }
-  };
-
-  const handleSpotifyLogin = async () => {
-    if (loadingMethod) return;
-    hapticClick();
-    setLoadingMethod('spotify');
-    try {
-      await loginWithSpotify();
-    } catch (error) {
-      console.error("Login failed", error);
-      setLoadingMethod(null);
-      alert("Erreur de connexion Spotify");
+      alert(`Erreur de connexion ${provider === 'google' ? 'Google' : 'Spotify'}`);
     }
   };
 
@@ -62,12 +49,12 @@ const Login = ({ lang, onLogin, initialCode, onBack }) => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[100dvh] text-center px-4 py-8 relative overflow-hidden supports-[padding-top:env(safe-area-inset-top)]:pt-[env(safe-area-inset-top)]">
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] text-center px-4 py-8 relative overflow-hidden pt-[calc(3rem+env(safe-area-inset-top))] md:pt-12">
 
       {onBack && (
         <button
           onClick={() => { hapticClick(); onBack(); }}
-          className="absolute top-12 left-6 z-50 p-2 text-white/50 hover:text-white transition-colors rounded-full hover:bg-white/10"
+          className="absolute left-6 z-50 p-2 text-white/50 hover:text-white transition-colors rounded-full hover:bg-white/10 top-[calc(1rem+env(safe-area-inset-top))] md:top-12"
         >
           <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -100,38 +87,41 @@ const Login = ({ lang, onLogin, initialCode, onBack }) => {
         {mode === 'menu' ? (
           <div className="space-y-4">
             {/* Option A: Google (Persistent) */}
-            <button
-              onClick={handleGoogleLogin}
-              disabled={loadingMethod !== null}
-              className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-4 px-6 rounded-2xl transition-all flex items-center justify-center gap-3 elastic-active shadow-xl group disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {loadingMethod === 'google' ? (
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-900"></div>
-              ) : (
-                <>
-                  <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-6 h-6" alt="G" />
-                  <span className="text-lg">Connexion Google</span>
-                </>
-              )}
-            </button>
+            {[
+              {
+                id: 'google',
+                label: 'Connexion Google',
+                bg: 'bg-white hover:bg-slate-100',
+                text: 'text-slate-900',
+                icon: <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-6 h-6" alt="G" />,
+                loader: 'border-slate-900'
+              },
+              {
+                id: 'spotify',
+                label: 'Connexion Spotify',
+                bg: 'bg-[#1DB954] hover:bg-[#1ed760]',
+                text: 'text-white',
+                icon: <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141 4.32-1.38 9.841-.719 13.44 1.5.42.3.6.84.3 1.32zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 14.82 1.14.54.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.24z" /></svg>,
+                loader: 'border-white'
+              }
+            ].map(p => (
+              <button
+                key={p.id}
+                onClick={() => handleOAuth(p.id)}
+                disabled={loadingMethod !== null}
+                className={`w-full ${p.bg} ${p.text} font-bold py-4 px-6 rounded-2xl transition-all flex items-center justify-center gap-3 elastic-active shadow-xl group disabled:opacity-70 disabled:cursor-not-allowed`}
+              >
+                {loadingMethod === p.id ? (
+                  <div className={`animate-spin rounded-full h-6 w-6 border-b-2 ${p.loader}`}></div>
+                ) : (
+                  <>
+                    {p.icon}
+                    <span className="text-lg">{p.label}</span>
+                  </>
+                )}
+              </button>
+            ))}
 
-            {/* Option B: Spotify */}
-            <button
-              onClick={handleSpotifyLogin}
-              disabled={loadingMethod !== null}
-              className="w-full bg-[#1DB954] hover:bg-[#1ed760] text-white font-bold py-4 px-6 rounded-2xl transition-all flex items-center justify-center gap-3 elastic-active shadow-xl group disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {loadingMethod === 'spotify' ? (
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-              ) : (
-                <>
-                  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141 4.32-1.38 9.841-.719 13.44 1.5.42.3.6.84.3 1.32zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 14.82 1.14.54.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.24z" />
-                  </svg>
-                  <span className="text-lg">Connexion Spotify</span>
-                </>
-              )}
-            </button>
             <p className="text-[10px] text-slate-400 font-medium">
               Sauvegarde tes favoris, historique et statistiques.
             </p>
