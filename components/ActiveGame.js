@@ -964,7 +964,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
         <div className="w-full max-w-md mx-auto pb-4 relative min-h-dvh flex flex-col">
             {/* Battery Warning Banner */}
             {showBatteryWarning && (
-                <div className="fixed top-0 left-0 w-full z-[100] bg-gradient-to-r from-red-600 to-orange-600 text-white text-[10px] font-bold py-2 px-4 text-center shadow-xl animate-slide-down border-b border-white/20">
+                <div className="fixed top-0 left-0 w-full z-[100] bg-gradient-to-r from-red-600 to-orange-600 text-white text-[10px] font-bold pb-2 px-4 pt-[calc(0.5rem+env(safe-area-inset-top))] text-center shadow-xl animate-slide-down border-b border-white/20">
                     {t(lang, 'game.batteryBanner')}
                 </div>
             )}
@@ -976,7 +976,7 @@ const ActiveGame = ({ initialGame, currentUser, lang, onGameUpdate, onLeave, onN
             )}
 
             {/* Header - Floating Capsule matching Lobby 'Bonjour' design */}
-            <header className="flex justify-between items-center sticky top-[calc(1rem+env(safe-area-inset-top))] z-40 mb-8 mx-2 md:mx-4 p-2 md:p-3 rounded-3xl glass-liquid transition-all">
+            <header className="flex justify-between items-center relative z-40 mb-4 mt-[calc(1rem+env(safe-area-inset-top))] mx-2 md:mx-4 p-2 md:p-3 rounded-3xl glass-liquid transition-all">
                 <div className="flex-1 flex justify-start gap-1 md:gap-2">
                     <button onClick={() => { hapticClick(); onLeave(); }} className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-white bg-white/5 rounded-full elastic-active">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>

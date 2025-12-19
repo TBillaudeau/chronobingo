@@ -14,7 +14,7 @@ export default function Document() {
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="icon" href="/icon.svg" />
       </Head>
-      <body className="bg-slate-900 text-white overscroll-none">
+      <body className="bg-[#020617] text-white overscroll-none">
         <Main />
         <NextScript />
       </body>
